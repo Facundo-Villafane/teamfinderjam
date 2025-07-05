@@ -1,4 +1,4 @@
-// src/components/gamejam/JamBanner.jsx - Versión en Español
+// src/components/gamejam/JamBanner.jsx - Con imagen responsive
 import React from 'react';
 import { Calendar, ExternalLink, Trophy, Users, Clock } from 'lucide-react';
 
@@ -34,18 +34,33 @@ export const JamBanner = ({ jam }) => {
   const status = getStatusInfo();
 
   return (
-    <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 mb-8 text-white relative overflow-hidden">
-      {/* Background pattern */}
-      <div className="absolute inset-0 opacity-5">
-        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white to-transparent transform rotate-12 translate-x-1/2"></div>
-      </div>
+    <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden mb-8 text-white relative">
+      {/* Imagen de banner como fondo si existe */}
+      {jam.bannerUrl && (
+        <div className="relative">
+          <img 
+            src={jam.bannerUrl} 
+            alt={jam.name}
+            className="w-full h-48 md:h-56 lg:h-64 object-cover"
+          />
+          {/* Overlay para mejorar legibilidad del texto */}
+          <div className="absolute inset-0 bg-black bg-opacity-50"></div>
+        </div>
+      )}
       
-      <div className="relative">
+      {/* Background pattern para cuando no hay imagen */}
+      {!jam.bannerUrl && (
+        <div className="absolute inset-0 opacity-5">
+          <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white to-transparent transform rotate-12 translate-x-1/2"></div>
+        </div>
+      )}
+      
+      <div className={`${jam.bannerUrl ? 'absolute inset-0' : ''} relative p-6 flex flex-col justify-center`}>
         <div className="flex items-center justify-between mb-4">
           <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2">
+            <div className="flex items-center gap-3 mb-2 flex-wrap">
               <Trophy className="w-7 h-7" style={{ color: '#0fc064' }} />
-              <h1 className="text-3xl font-bold">{jam.name}</h1>
+              <h1 className="text-3xl md:text-4xl font-bold">{jam.name}</h1>
               <span 
                 className="text-white px-3 py-1 rounded-full text-sm font-bold flex items-center gap-1"
                 style={{ backgroundColor: status.color }}
@@ -55,7 +70,7 @@ export const JamBanner = ({ jam }) => {
               </span>
             </div>
             
-            <p className="text-gray-300 text-lg mb-4 max-w-2xl">{jam.description}</p>
+            <p className="text-gray-200 text-lg mb-4 max-w-3xl">{jam.description}</p>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
               {jam.theme && (
@@ -67,32 +82,21 @@ export const JamBanner = ({ jam }) => {
               )}
               
               <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-gray-400" />
+                <Calendar className="w-4 h-4 text-gray-300" />
                 <span className="font-semibold">Duración:</span>
                 <span>{jam.startDate} → {jam.endDate}</span>
               </div>
               
               <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-gray-400" />
+                <Users className="w-4 h-4 text-gray-300" />
                 <span className="font-semibold">¡Encuentra tu equipo abajo!</span>
               </div>
             </div>
           </div>
-          
-          {jam.bannerUrl && (
-            <div className="ml-6 hidden lg:block">
-              <img 
-                src={jam.bannerUrl} 
-                alt={jam.name}
-                className="h-32 w-64 object-cover rounded-lg shadow-lg border-2"
-                style={{ borderColor: '#0fc064' }}
-              />
-            </div>
-          )}
         </div>
         
         {jam.jamLink && (
-          <div className="pt-4 border-t border-gray-700">
+          <div className="pt-4 border-t border-gray-600">
             <a 
               href={jam.jamLink} 
               target="_blank" 
