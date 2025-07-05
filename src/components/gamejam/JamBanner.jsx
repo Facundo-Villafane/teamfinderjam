@@ -44,7 +44,7 @@ export const JamBanner = ({ jam }) => {
             className="w-full h-48 md:h-56 lg:h-64 object-cover"
           />
           {/* Overlay para mejorar legibilidad del texto */}
-          <div className="absolute inset-0 bg-black bg-opacity-50"></div>
+          {/*<div className="absolute inset-0 bg-black bg-opacity-50"></div>*/}
         </div>
       )}
       
