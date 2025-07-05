@@ -1,12 +1,13 @@
 // src/components/admin/AdminTabs.jsx
 import React from 'react';
-import { BarChart3, Calendar, Shield } from 'lucide-react';
+import { BarChart3, Calendar, Shield, Vote } from 'lucide-react';
 
 export const AdminTabs = ({ currentTab, onTabChange }) => {
   const tabs = [
     { id: 'overview', name: 'Overview', icon: BarChart3 },
     { id: 'jams', name: 'Jams', icon: Calendar },
-    { id: 'moderation', name: 'Moderación', icon: Shield },
+      { id: 'moderation', name: 'Moderación', icon: Shield },
+      { id: 'themes', name: 'Temas', icon: Vote }
   ];
 
   return (

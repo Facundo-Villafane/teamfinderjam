@@ -1,10 +1,11 @@
-// src/components/AdminDashboard.jsx
+// src/components/AdminDashboard.jsx - Con ThemesTab completo
 import React, { useState } from 'react';
 
 // Importar hooks personalizados
 import { useAdminData } from '../hooks/useAdminData';
 import { useJamActions } from '../hooks/useJamActions';
 import { usePostActions } from '../hooks/usePostActions';
+import { useThemeActions } from '../hooks/useThemeActions'; // Nuevo hook
 
 // Importar componentes admin específicos
 import { AdminHeader } from './admin/AdminHeader';
@@ -13,6 +14,8 @@ import { OverviewTab } from './admin/OverviewTab';
 import { JamsTab } from './admin/JamsTab';
 import { ModerationTab } from './admin/ModerationTab';
 import { JamEditor } from './admin/JamEditor';
+import { ThemesTab } from './admin/ThemesTab';
+import { ThemeEditor } from './admin/ThemeEditor';
 
 const AdminDashboard = ({ user, onClose }) => {
   const [currentTab, setCurrentTab] = useState('overview');
@@ -36,6 +39,31 @@ const AdminDashboard = ({ user, onClose }) => {
     handleToggleFlagged
   } = usePostActions(user, loadAllData);
 
+  // Nuevo hook para temas
+  const {
+    themes,
+    votingResults,
+    editingTheme,
+    loadThemeData,
+    handleCreateTheme,
+    handleEditTheme,
+    handleSaveTheme,
+    handleDeleteTheme,
+    handleCancelThemeEdit,
+    handleToggleVoting,
+    handleSelectWinner
+  } = useThemeActions(user);
+
+  // Obtener jam activa
+  const activeJam = jams.find(jam => jam.active) || null;
+
+  // Cargar datos de temas cuando cambia la jam activa
+  React.useEffect(() => {
+    if (activeJam?.id) {
+      loadThemeData(activeJam.id);
+    }
+  }, [activeJam?.id, loadThemeData]);
+
   const renderTabContent = () => {
     switch (currentTab) {
       case 'overview':
@@ -58,6 +86,19 @@ const AdminDashboard = ({ user, onClose }) => {
             onToggleFlagged={(postId) => handleToggleFlagged(postId, posts)}
             onDeletePost={(postId) => handleDeletePost(postId, posts)}
             loading={loading}
+          />
+        );
+      case 'themes':
+        return (
+          <ThemesTab
+            currentJam={activeJam}
+            themes={themes}
+            votingResults={votingResults}
+            onCreateTheme={handleCreateTheme}
+            onEditTheme={handleEditTheme}
+            onDeleteTheme={handleDeleteTheme}
+            onToggleVoting={handleToggleVoting}
+            onSelectWinner={handleSelectWinner}
           />
         );
       default:
@@ -88,6 +129,15 @@ const AdminDashboard = ({ user, onClose }) => {
           jam={editingJam.id ? editingJam : null}
           onSave={handleSaveJam}
           onCancel={handleCancelEdit}
+        />
+      )}
+
+      {editingTheme !== null && (
+        <ThemeEditor
+          theme={editingTheme.id ? editingTheme : null}
+          currentJam={activeJam}
+          onSave={handleSaveTheme}
+          onCancel={handleCancelThemeEdit}
         />
       )}
     </div>
