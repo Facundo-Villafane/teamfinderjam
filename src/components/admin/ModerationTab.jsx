@@ -10,7 +10,7 @@ export const ModerationTab = ({
   loading 
 }) => (
   <div className="space-y-6">
-    <h3 className="text-lg font-semibold">Moderación de Posts</h3>
+    <h3 className="text-lg text-white font-semibold">Moderación de Posts</h3>
     
     <div className="space-y-4">
       {posts.map(post => (

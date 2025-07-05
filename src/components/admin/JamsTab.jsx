@@ -6,7 +6,7 @@ import { JamCard } from './JamCard';
 export const JamsTab = ({ jams, onCreateJam, onEditJam, onDeleteJam, onToggleActive }) => (
   <div className="space-y-6">
     <div className="flex justify-between items-center">
-      <h3 className="text-lg font-semibold">Gestión de Jams</h3>
+      <h3 className="text-lg text-white font-semibold">Gestión de Jams</h3>
       <button
         onClick={onCreateJam}
         className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2"
