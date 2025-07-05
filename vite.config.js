@@ -8,8 +8,8 @@ export default defineConfig({
     tailwindcss(),
     react()
   ],
-  // Configuración para GitHub Pages
-  base: '/teamfinderjam/', // Reemplaza 'teamfinder' con el nombre de tu repositorio
+  // Configuración
+  base: '/', 
   build: {
     outDir: 'dist',
     assetsDir: 'assets'
