@@ -1,4 +1,4 @@
-// src/components/GameJamApp.jsx - Simplificado sin EditionSelector
+// src/components/GameJamApp.jsx - Versión en Español
 import React, { useState } from 'react';
 import { LogIn } from 'lucide-react';
 
@@ -21,11 +21,11 @@ const GameJamApp = () => {
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
 
   // Configuración
-  const adminEmails = ['tu-email@gmail.com', 'admin@example.com']; // CAMBIAR POR TU EMAIL
+  const adminEmails = ['facundo.tnd@gmail.com', 'admin@example.com']; // CAMBIAR POR TU EMAIL
   
   const skillOptions = [
-    '2D Art', '3D Art', 'Code', 'Design & Production', 'Music', 'SFX', 
-    'Team Lead', 'Testing & Support', 'Other', 'Vibes', 'Voice Acting'
+    'Arte 2D', 'Arte 3D', 'Programación', 'Diseño y Producción', 'Música', 'Efectos de Sonido', 
+    'Líder de Equipo', 'Testing y Soporte', 'Otro', 'Vibes', 'Actuación de Voz'
   ];
 
   const toolOptions = [
@@ -62,7 +62,7 @@ const GameJamApp = () => {
   // Handlers
   const handleCreatePostClick = () => {
     if (!user) {
-      if (window.confirm('You need to sign in to create a post. Would you like to sign in now?')) {
+      if (window.confirm('Necesitas iniciar sesión para crear una publicación. ¿Te gustaría hacerlo ahora?')) {
         handleSignIn();
       }
       return;
@@ -106,8 +106,8 @@ const GameJamApp = () => {
   // Loading state
   if (loading || jamLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-950 to-orange-950 flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-white text-xl">Cargando...</div>
       </div>
     );
   }
@@ -119,7 +119,7 @@ const GameJamApp = () => {
 
   // Main app
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-950 to-orange-950 p-4">
+    <div className="min-h-screen bg-gray-900 p-4">
       <div className="max-w-6xl mx-auto">
         <AppHeader
           user={user}
@@ -162,14 +162,15 @@ const GameJamApp = () => {
             timezoneOptions={timezoneOptions}
           />
         ) : (
-          <div className="text-center text-orange-200 py-12">
-            <p className="text-xl mb-4">You need to sign in to create a post</p>
+          <div className="text-center text-gray-300 py-12">
+            <p className="text-xl mb-4">Necesitas iniciar sesión para crear una publicación</p>
             <button
               onClick={handleSignIn}
-              className="flex items-center gap-3 bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg font-medium transition-colors mx-auto"
+              className="flex items-center gap-3 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors mx-auto"
+              style={{ backgroundColor: '#0fc064' }}
             >
               <LogIn className="w-5 h-5" />
-              Sign in with Google
+              Iniciar sesión con Google
             </button>
           </div>
         )}

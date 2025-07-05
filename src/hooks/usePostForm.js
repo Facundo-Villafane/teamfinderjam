@@ -1,4 +1,4 @@
-// src/hooks/usePostForm.js
+// src/hooks/usePostForm.js - Con contacto actualizado
 import { useState } from 'react';
 
 export const usePostForm = () => {
@@ -13,7 +13,9 @@ export const usePostForm = () => {
     description: '',
     timezone: 'UTC-3: Halifax, São Paulo, Buenos Aires',
     memberCount: 1,
-    tools: []
+    tools: [],
+    contactType: 'discord',
+    contactInfo: ''
   });
 
   const resetForm = () => {
@@ -25,7 +27,9 @@ export const usePostForm = () => {
       description: '',
       timezone: 'UTC-3: Halifax, São Paulo, Buenos Aires',
       memberCount: 1,
-      tools: []
+      tools: [],
+      contactType: 'discord',
+      contactInfo: ''
     });
   };
 
@@ -62,7 +66,10 @@ export const usePostForm = () => {
   const handleEditPost = (post) => {
     setEditingPost({
       ...post,
-      teamMembers: post.teamMembers.join(', ')
+      teamMembers: post.teamMembers.join(', '),
+      // Asegurar que los nuevos campos existan
+      contactType: post.contactType || 'discord',
+      contactInfo: post.contactInfo || ''
     });
   };
 

@@ -1,4 +1,4 @@
-// src/components/gamejam/Navigation.jsx
+// src/components/gamejam/Navigation.jsx - Versión en Español
 import React from 'react';
 import { Plus } from 'lucide-react';
 
@@ -14,27 +14,29 @@ export const Navigation = ({
       onClick={() => onViewChange('browse')}
       className={`px-6 py-3 rounded-lg font-medium transition-colors ${
         currentView === 'browse'
-          ? 'bg-orange-600 text-white'
-          : 'bg-orange-100 text-orange-800 hover:bg-orange-200'
+          ? 'text-white'
+          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
       }`}
+      style={currentView === 'browse' ? { backgroundColor: '#0fc064' } : {}}
     >
-      Browse Teams
+      Explorar Equipos
     </button>
     {!userPost || !user ? (
       <button
         onClick={onCreatePostClick}
         className={`px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 ${
           currentView === 'create'
-            ? 'bg-orange-600 text-white'
-            : 'bg-orange-100 text-orange-800 hover:bg-orange-200'
+            ? 'text-white'
+            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
         }`}
+        style={currentView === 'create' ? { backgroundColor: '#0fc064' } : {}}
       >
         <Plus className="w-5 h-5" />
-        Create Post
+        Crear Publicación
       </button>
     ) : (
-      <div className="text-orange-200 px-6 py-3">
-        You already have a post for this edition
+      <div className="text-gray-400 px-6 py-3">
+        Ya tienes una publicación para esta edición
       </div>
     )}
   </nav>

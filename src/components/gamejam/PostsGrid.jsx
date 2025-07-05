@@ -1,4 +1,4 @@
-// src/components/gamejam/PostsGrid.jsx - Actualizado para mostrar info de la jam
+// src/components/gamejam/PostsGrid.jsx - Versión en Español
 import React from 'react';
 import { PostCard } from './PostCard';
 
@@ -14,9 +14,9 @@ export const PostsGrid = ({ posts, user, currentJam, onEditPost, onDeletePost })
       />
     ))}
     {posts.length === 0 && (
-      <div className="col-span-2 text-center text-orange-200 py-12">
-        <p className="text-xl">No posts yet for {currentJam?.name || 'this jam'}</p>
-        <p>Be the first to create one!</p>
+      <div className="col-span-2 text-center text-gray-400 py-12">
+        <p className="text-xl">Aún no hay publicaciones para {currentJam?.name || 'esta jam'}</p>
+        <p>¡Sé el primero en crear una!</p>
       </div>
     )}
   </div>
