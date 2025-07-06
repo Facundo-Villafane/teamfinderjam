@@ -41,26 +41,7 @@ const ThemeVotingPage = ({ user }) => {
         onSignIn={handleSignIn} 
       />
 
-      {/* Información adicional */}
-      <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 text-white">
-        <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-          ℹ️ ¿Cómo funciona la votación?
-        </h3>
-        <div className="space-y-3 text-gray-300">
-          <p>
-            • <strong>Vota una vez:</strong> Puedes votar por un tema, pero también cambiar tu voto si cambias de opinión.
-          </p>
-          <p>
-            • <strong>Resultados en tiempo real:</strong> Los resultados se actualizan automáticamente conforme van llegando votos.
-          </p>
-          <p>
-            • <strong>Votación limitada:</strong> Solo puedes votar durante el período habilitado por los organizadores.
-          </p>
-          <p>
-            • <strong>Tema ganador:</strong> El tema con más votos será seleccionado para la game jam.
-          </p>
-        </div>
-      </div>
+      
 
       {/* Call to action para el team finder */}
       <div className="bg-gradient-to-r from-green-900 to-blue-900 border border-green-600 rounded-lg p-6 text-center">

@@ -1,4 +1,4 @@
-// src/components/gamejam/ThemeVoting.jsx - Sistema de múltiples votos sin resultados
+// src/components/gamejam/ThemeVoting.jsx - Sistema de múltiples votos corregido
 import React, { useState, useEffect } from 'react';
 import { 
   Vote, 
@@ -44,6 +44,44 @@ export const ThemeVoting = ({ currentJam, user, onSignIn }) => {
     canVote,
     getRestrictionMessage
   } = useJamParticipation(user, currentJam);
+
+  // ✅ FUNCIONES AUXILIARES PRIMERO (antes de usarlas)
+  const getThemesByCategory = () => {
+    const grouped = {};
+    themes.forEach(theme => {
+      const category = theme.category || 'Sin Categoría';
+      if (!grouped[category]) {
+        grouped[category] = [];
+      }
+      grouped[category].push(theme);
+    });
+    return grouped;
+  };
+
+  const getVotePercentage = (themeId) => {
+    if (!showResults) return 0;
+    const totalVotes = Object.values(votingResults).reduce((sum, count) => sum + count, 0);
+    if (totalVotes === 0) return 0;
+    const votes = votingResults[themeId] || 0;
+    return Math.round((votes / totalVotes) * 100);
+  };
+
+  const toggleThemeExpansion = (themeId) => {
+    const newExpanded = new Set(expandedThemes);
+    if (newExpanded.has(themeId)) {
+      newExpanded.delete(themeId);
+    } else {
+      newExpanded.add(themeId);
+    }
+    setExpandedThemes(newExpanded);
+  };
+
+  // ✅ CÁLCULOS (después de las funciones auxiliares)
+  const totalUserVotes = userVotes.length;
+  const votingClosed = currentJam?.themeVotingClosed || false;
+  const winnerTheme = currentJam?.selectedTheme || null;
+  const groupedThemes = getThemesByCategory();
+  const showResults = winnerTheme !== null; // Solo mostrar resultados cuando hay ganador
 
   // Cargar datos de temas
   useEffect(() => {
@@ -138,43 +176,6 @@ export const ThemeVoting = ({ currentJam, user, onSignIn }) => {
     } finally {
       setSubmittingVote(false);
     }
-  };
-
-  const toggleThemeExpansion = (themeId) => {
-    const newExpanded = new Set(expandedThemes);
-    if (newExpanded.has(themeId)) {
-      newExpanded.delete(themeId);
-    } else {
-      newExpanded.add(themeId);
-    }
-    setExpandedThemes(newExpanded);
-  };
-
-  // Cálculos
-  const totalUserVotes = userVotes.length;
-  const votingClosed = currentJam?.themeVotingClosed || false;
-  const winnerTheme = currentJam?.selectedTheme || null;
-  const groupedThemes = getThemesByCategory();
-  const showResults = winnerTheme !== null; // Solo mostrar resultados cuando hay ganador
-  
-  const getVotePercentage = (themeId) => {
-    if (!showResults) return 0;
-    const totalVotes = Object.values(votingResults).reduce((sum, count) => sum + count, 0);
-    if (totalVotes === 0) return 0;
-    const votes = votingResults[themeId] || 0;
-    return Math.round((votes / totalVotes) * 100);
-  };
-
-  const getThemesByCategory = () => {
-    const grouped = {};
-    themes.forEach(theme => {
-      const category = theme.category || 'Sin Categoría';
-      if (!grouped[category]) {
-        grouped[category] = [];
-      }
-      grouped[category].push(theme);
-    });
-    return grouped;
   };
 
   // Renderizar botón de "Unirse para votar"
@@ -444,13 +445,13 @@ export const ThemeVoting = ({ currentJam, user, onSignIn }) => {
         {viewMode === 'grouped' ? (
           // Vista agrupada por categorías
           Object.entries(groupedThemes).map(([category, categoryThemes]) => (
-            <div key={category} className="bg-gray-800 border border-gray-700 rounded-lg p-6 text-white">
-              <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+            <div key={category} className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                 <div 
                   className="w-4 h-4 rounded-full"
                   style={{ backgroundColor: categoryThemes[0]?.categoryColor || '#6B7280' }}
                 />
-                {category} ({categoryThemes.length})
+                {category} ({categoryThemes.length} temas)
               </h3>
               
               <div className="space-y-3">
@@ -465,96 +466,83 @@ export const ThemeVoting = ({ currentJam, user, onSignIn }) => {
                     <div
                       key={theme.id}
                       className={`border rounded-lg p-4 transition-all ${
-                        isUserVoted ? 'border-green-500 bg-green-900 bg-opacity-20' : 'border-gray-600'
+                        isUserVoted 
+                          ? 'border-green-500 bg-green-900 bg-opacity-20' 
+                          : 'border-gray-600 hover:border-gray-500'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-start justify-between mb-3">
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h4 className="font-semibold">{theme.title}</h4>
-                            {isUserVoted && <CheckCircle className="w-4 h-4 text-green-400" />}
+                          <div className="flex items-center gap-2 mb-2">
+                            <h4 className="text-md font-semibold text-white">{theme.title}</h4>
+                            {isUserVoted && (
+                              <span className="text-xs px-2 py-1 rounded-full bg-green-600 text-white font-medium">
+                                ✓ Votado
+                              </span>
+                            )}
                           </div>
                           
-                          {!isExpanded && (
-                            <p className="text-gray-400 text-sm line-clamp-1">
-                              {theme.description.length > 60 
-                                ? `${theme.description.substring(0, 60)}...` 
-                                : theme.description}
-                            </p>
-                          )}
-                        </div>
-                        
-                        {/* Solo mostrar conteo si hay ganador */}
-                        {showResults && (
-                          <div className="flex items-center gap-4">
-                            <div className="text-right">
-                              <div className="text-lg font-bold">{voteCount}</div>
-                              <div className="text-xs text-gray-400">votos</div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-sm font-semibold text-blue-400">{percentage}%</div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      
-                      {isExpanded && (
-                        <div className="mt-3 pt-3 border-t border-gray-600">
-                          <p className="text-gray-300 text-sm mb-3">{theme.description}</p>
-                          {theme.category && (
-                            <span 
-                              className="text-xs px-2 py-1 rounded-full text-white font-medium"
-                              style={{ backgroundColor: theme.categoryColor || '#6B7280' }}
+                          <p className="text-gray-300 text-sm leading-relaxed">
+                            {isExpanded || theme.description.length <= 100 
+                              ? theme.description 
+                              : `${theme.description.substring(0, 100)}...`
+                            }
+                          </p>
+                          
+                          {theme.description.length > 100 && (
+                            <button
+                              onClick={() => toggleThemeExpansion(theme.id)}
+                              className="text-blue-400 hover:text-blue-300 text-xs mt-1 transition-colors"
                             >
-                              {theme.category}
-                            </span>
+                              {isExpanded ? 'Ver menos' : 'Ver más'}
+                            </button>
                           )}
                         </div>
-                      )}
-                      
-                      <div className="flex items-center justify-between mt-3">
-                        <button
-                          onClick={() => toggleThemeExpansion(theme.id)}
-                          className="text-blue-400 hover:text-blue-300 text-sm font-medium"
-                        >
-                          {isExpanded ? 'Ver menos' : 'Ver más'}
-                        </button>
                         
-                        {isClickable && (
-                          <button
-                            onClick={() => handleVoteToggle(theme.id)}
-                            disabled={submittingVote || (!isUserVoted && remainingVotes <= 0)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 ${
-                              isUserVoted 
-                                ? 'bg-green-600 text-white hover:bg-green-700' 
-                                : remainingVotes > 0
-                                ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                                : 'bg-gray-600 text-gray-300 cursor-not-allowed'
-                            }`}
-                          >
-                            {isUserVoted ? (
-                              <>
-                                <Star className="w-4 h-4 fill-current" />
-                                Votado
-                              </>
-                            ) : remainingVotes > 0 ? (
-                              <>
-                                <StarOff className="w-4 h-4" />
-                                {submittingVote ? 'Votando...' : 'Votar'}
-                              </>
-                            ) : (
-                              <>
-                                <StarOff className="w-4 h-4" />
-                                Sin votos
-                              </>
-                            )}
-                          </button>
-                        )}
+                        <div className="flex flex-col gap-2 ml-3">
+                          {showResults && (
+                            <div className="text-center text-gray-300 text-xs">
+                              <div className="font-bold">{voteCount}</div>
+                              <div>votos</div>
+                            </div>
+                          )}
+                          
+                          {!votingClosed && (
+                            <button
+                              onClick={() => handleVoteToggle(theme.id)}
+                              disabled={!isClickable || (!isUserVoted && remainingVotes <= 0)}
+                              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 ${
+                                isUserVoted
+                                  ? 'bg-green-600 hover:bg-green-700 text-white'
+                                  : remainingVotes > 0
+                                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                    : 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                              }`}
+                            >
+                              {isUserVoted ? (
+                                <>
+                                  <Star className="w-3 h-3 fill-current" />
+                                  Votado
+                                </>
+                              ) : remainingVotes > 0 ? (
+                                <>
+                                  <StarOff className="w-3 h-3" />
+                                  Votar
+                                </>
+                              ) : (
+                                <>
+                                  <StarOff className="w-3 h-3" />
+                                  Sin votos
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </div>
                       </div>
                       
                       {/* Barra de progreso solo si hay resultados */}
                       {showResults && (
-                        <div className="w-full bg-gray-700 rounded-full h-1 mt-3">
+                        <div className="w-full bg-gray-700 rounded-full h-1">
                           <div
                             className={`h-1 rounded-full transition-all duration-500 ${
                               isUserVoted ? 'bg-green-500' : 'bg-blue-500'
@@ -570,7 +558,7 @@ export const ThemeVoting = ({ currentJam, user, onSignIn }) => {
             </div>
           ))
         ) : (
-          // Vista de lista
+          // Vista de lista (modo actual)
           themes.map((theme) => {
             const isUserVoted = userVotes.includes(theme.id);
             const isExpanded = expandedThemes.has(theme.id);
@@ -581,15 +569,16 @@ export const ThemeVoting = ({ currentJam, user, onSignIn }) => {
             return (
               <div
                 key={theme.id}
-                className={`bg-gray-800 border rounded-lg p-6 text-white transition-all ${
-                  isUserVoted ? 'border-green-500 bg-green-900 bg-opacity-20' : 'border-gray-700'
+                className={`bg-gray-800 border rounded-lg p-6 transition-all ${
+                  isUserVoted 
+                    ? 'border-green-500 bg-green-900 bg-opacity-20' 
+                    : 'border-gray-700 hover:border-gray-600'
                 }`}
               >
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h3 className="text-xl font-bold">{theme.title}</h3>
-                      {isUserVoted && <CheckCircle className="w-5 h-5 text-green-400" />}
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="text-lg font-bold text-white">{theme.title}</h3>
                       {theme.category && (
                         <span 
                           className="text-xs px-2 py-1 rounded-full text-white font-medium"
@@ -598,48 +587,48 @@ export const ThemeVoting = ({ currentJam, user, onSignIn }) => {
                           {theme.category}
                         </span>
                       )}
+                      {isUserVoted && (
+                        <span className="text-xs px-2 py-1 rounded-full bg-green-600 text-white font-medium">
+                          ✓ Votado
+                        </span>
+                      )}
                     </div>
                     
-                    <p className="text-gray-300 mb-3">
+                    <p className="text-gray-300 leading-relaxed">
                       {isExpanded || theme.description.length <= 150 
                         ? theme.description 
-                        : `${theme.description.substring(0, 150)}...`}
+                        : `${theme.description.substring(0, 150)}...`
+                      }
                     </p>
                     
                     {theme.description.length > 150 && (
                       <button
                         onClick={() => toggleThemeExpansion(theme.id)}
-                        className="text-blue-400 hover:text-blue-300 text-sm font-medium mb-3"
+                        className="text-blue-400 hover:text-blue-300 text-sm mt-2 transition-colors"
                       >
                         {isExpanded ? 'Ver menos' : 'Ver más'}
                       </button>
                     )}
                   </div>
                   
-                  <div className="flex flex-col items-end gap-2 ml-6">
-                    {/* Solo mostrar conteo si hay resultados */}
+                  <div className="flex flex-col gap-2 ml-4">
                     {showResults && (
-                      <>
-                        <div className="text-right">
-                          <div className="text-2xl font-bold">{voteCount}</div>
-                          <div className="text-sm text-gray-400">votos</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-lg font-semibold text-blue-400">{percentage}%</div>
-                        </div>
-                      </>
+                      <div className="text-center text-gray-300 text-sm">
+                        <div className="font-bold">{voteCount}</div>
+                        <div className="text-xs">votos</div>
+                      </div>
                     )}
                     
-                    {isClickable && (
+                    {!votingClosed && (
                       <button
                         onClick={() => handleVoteToggle(theme.id)}
-                        disabled={submittingVote || (!isUserVoted && remainingVotes <= 0)}
-                        className={`flex items-center gap-2 px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 ${
-                          isUserVoted 
-                            ? 'bg-green-600 text-white hover:bg-green-700' 
+                        disabled={!isClickable || (!isUserVoted && remainingVotes <= 0)}
+                        className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                          isUserVoted
+                            ? 'bg-green-600 hover:bg-green-700 text-white'
                             : remainingVotes > 0
-                            ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                            : 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                              ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                              : 'bg-gray-600 text-gray-300 cursor-not-allowed'
                         }`}
                       >
                         {isUserVoted ? (
@@ -680,25 +669,56 @@ export const ThemeVoting = ({ currentJam, user, onSignIn }) => {
         )}
       </div>
 
-      {/* Información adicional */}
+      {/* Información sobre el sistema de votación - Sidebar estilo */}
       {!votingClosed && (
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 text-white">
-          <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-            ℹ️ Sobre esta votación
-          </h3>
-          <div className="space-y-3 text-gray-300">
-            <p>
-              • <strong>Votos múltiples:</strong> Puedes votar por hasta 4 temas diferentes que te gusten.
-            </p>
-            <p>
-              • <strong>Resultados secretos:</strong> Los resultados no se muestran hasta que se anuncie el tema ganador.
-            </p>
-            <p>
-              • <strong>Cambiar votos:</strong> Puedes agregar o quitar votos mientras la votación esté abierta.
-            </p>
-            <p>
-              • <strong>Sorpresa garantizada:</strong> Nadie sabrá cuál es el tema hasta que comience la jam.
-            </p>
+        <div className="bg-gradient-to-r from-indigo-900 to-purple-900 border border-indigo-600 rounded-lg p-6 text-white">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 bg-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Info className="w-6 h-6 text-white" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-bold text-white mb-3">
+                📋 Guía de Votación
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2">
+                    <div className="w-2 h-2 bg-indigo-300 rounded-full mt-2 flex-shrink-0"></div>
+                    <p className="text-indigo-100">
+                      <strong>Múltiples votos:</strong> Selecciona hasta 4 temas que te inspiren
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <div className="w-2 h-2 bg-indigo-300 rounded-full mt-2 flex-shrink-0"></div>
+                    <p className="text-indigo-100">
+                      <strong>Cambios permitidos:</strong> Puedes agregar o quitar votos en cualquier momento
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2">
+                    <div className="w-2 h-2 bg-indigo-300 rounded-full mt-2 flex-shrink-0"></div>
+                    <p className="text-indigo-100">
+                      <strong>Resultados secretos:</strong> Se revelan cuando se anuncia el ganador
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <div className="w-2 h-2 bg-indigo-300 rounded-full mt-2 flex-shrink-0"></div>
+                    <p className="text-indigo-100">
+                      <strong>Final sorpresa:</strong> El tema se mantiene en misterio hasta el inicio
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-4 p-3 bg-indigo-800 bg-opacity-50 rounded-lg border border-indigo-500">
+                <p className="text-indigo-200 text-sm text-center">
+                  💡 <strong>Consejo:</strong> Vota por temas que te emocionen y sobre los que tengas ideas para desarrollar
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       )}

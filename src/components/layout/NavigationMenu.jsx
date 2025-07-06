@@ -30,7 +30,7 @@ export const NavigationMenu = ({ isOpen, onClose, user, isAdmin, currentPath }) 
     //  icon: Vote,
     //  title: 'Votación de Temas',
     //  description: 'Vota por el tema de la jam',
-    //  color: '#8B5CF6'
+    // color: '#8B5CF6'
     //}
   ]
 

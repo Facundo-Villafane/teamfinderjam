@@ -11,11 +11,23 @@ import {
   Users,
   Clock,
   CheckCircle,
-  Play
+    Play,
+    Award, 
+    Download, 
+    Star, 
+    Palette, 
+    Music, 
+    BookOpen, 
+    Lightbulb,
+    Sparkles
 } from 'lucide-react';
 import { getPostsByUser } from '../firebase/firestore';
 import { getUserJamHistory } from '../firebase/participants';
 import { useJamParticipation } from '../hooks/useJamParticipation';
+
+  // Agregar estos imports al inicio del archivo
+  import { getUserCertificates } from '../firebase/certificates';
+  import { generateCertificatePDF } from '../utils/pdfGenerator';
 
 const ProfilePage = ({ user, currentJam }) => {
   const [userPosts, setUserPosts] = useState([]);
@@ -25,7 +37,8 @@ const ProfilePage = ({ user, currentJam }) => {
     totalJamsParticipated: 0,
     memberSince: null
   });
-  const [jamHistory, setJamHistory] = useState([]);
+    const [jamHistory, setJamHistory] = useState([]);
+    const [certificates, setCertificates] = useState([]);
 
   // Hook de participación para la jam actual
   const { isJoined: isJoinedCurrentJam } = useJamParticipation(user, currentJam);
@@ -33,9 +46,79 @@ const ProfilePage = ({ user, currentJam }) => {
   const adminEmails = ['facundo.tnd@gmail.com', 'admin@example.com'];
   const isAdmin = user && adminEmails.includes(user.email);
 
+    
+  const loadUserCertificates = async () => {
+    if (!user) return;
+    
+    try {
+      const userCertificates = await getUserCertificates(user.uid);
+      setCertificates(userCertificates);
+    } catch (error) {
+      console.error('Error loading certificates:', error);
+    }
+  };
+  
+  // Actualizar el useEffect para cargar certificados
   useEffect(() => {
     loadUserData();
+    loadUserCertificates();
   }, [user]);
+  
+  // Función para iconos de categorías
+  const getCategoryIcon = (category) => {
+    const icons = {
+      'participation': Award,
+      'originality': Lightbulb,
+      'creativity': Sparkles,
+      'narrative': BookOpen,
+      'aesthetics': Palette,
+      'sound': Music
+    };
+    return icons[category] || Award;
+  };
+  
+  // Función para colores de categorías
+  const getCategoryColor = (category) => {
+    const colors = {
+      'participation': 'from-blue-600 to-blue-800',
+      'originality': 'from-yellow-600 to-orange-600',
+      'creativity': 'from-purple-600 to-pink-600',
+      'narrative': 'from-green-600 to-emerald-600',
+      'aesthetics': 'from-rose-600 to-pink-600',
+      'sound': 'from-indigo-600 to-purple-600'
+    };
+    return colors[category] || 'from-gray-600 to-gray-800';
+  };
+  
+  // Función para nombres de categorías
+  const getCategoryName = (category) => {
+    const names = {
+      'participation': 'Participación',
+      'originality': 'Originalidad',
+      'creativity': 'Creatividad',
+      'narrative': 'Narrativa/Concepto',
+      'aesthetics': 'Estética/Arte',
+      'sound': 'Sonido/Música'
+    };
+    return names[category] || category;
+  };
+  
+  // Función para descargar certificado
+  const handleDownloadCertificate = async (certificate) => {
+    try {
+      await generateCertificatePDF({
+        userName: user.displayName || 'Participante',
+        jamName: certificate.jamName,
+        category: getCategoryName(certificate.category),
+        isWinner: certificate.isWinner,
+        date: certificate.awardedDate,
+        certificateId: certificate.id
+      });
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Error al generar el certificado. Intenta de nuevo.');
+    }
+  };
 
   const loadUserData = async () => {
     if (!user) return;
@@ -262,7 +345,132 @@ const ProfilePage = ({ user, currentJam }) => {
             })}
           </div>
         </div>
-      )}
+          )}
+          
+          
+{certificates.length > 0 && (
+  <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+    <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+      <Award className="w-6 h-6" style={{ color: '#FFD700' }} />
+      Certificados y Reconocimientos
+    </h2>
+    
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {certificates.map((cert) => {
+        const CategoryIcon = getCategoryIcon(cert.category);
+        const gradientColor = getCategoryColor(cert.category);
+        
+        return (
+          <div 
+            key={cert.id}
+            className="relative group"
+          >
+            {/* Certificado visual */}
+            <div className={`bg-gradient-to-br ${gradientColor} rounded-lg p-6 text-white shadow-lg transform transition-all duration-300 group-hover:scale-105 group-hover:shadow-xl`}>
+              {/* Header del certificado */}
+              <div className="text-center mb-4">
+                <div className="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <CategoryIcon className="w-8 h-8 text-white" />
+                </div>
+                
+                {cert.isWinner ? (
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <Star className="w-5 h-5 text-yellow-300 fill-current" />
+                    <h3 className="text-lg font-bold">RECONOCIMIENTO</h3>
+                    <Star className="w-5 h-5 text-yellow-300 fill-current" />
+                  </div>
+                ) : (
+                  <h3 className="text-lg font-bold mb-2">CERTIFICADO</h3>
+                )}
+                
+                <div className="h-0.5 bg-white bg-opacity-30 mx-4"></div>
+              </div>
+              
+              {/* Contenido del certificado */}
+              <div className="text-center space-y-2">
+                <p className="text-sm opacity-90">
+                  {cert.isWinner ? 'Reconocimiento por' : 'Certificado de participación en'}
+                </p>
+                
+                <h4 className="font-bold text-lg leading-tight">
+                  {getCategoryName(cert.category)}
+                </h4>
+                
+                <p className="text-sm opacity-75">
+                  {cert.jamName}
+                </p>
+                
+                <div className="pt-2">
+                  <p className="text-xs opacity-70">
+                    {new Date(cert.awardedDate?.toDate()).toLocaleDateString('es-ES', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    })}
+                  </p>
+                </div>
+              </div>
+              
+              {/* Elementos decorativos */}
+              <div className="absolute top-2 left-2 w-3 h-3 bg-white bg-opacity-20 rounded-full"></div>
+              <div className="absolute top-2 right-2 w-3 h-3 bg-white bg-opacity-20 rounded-full"></div>
+              <div className="absolute bottom-2 left-2 w-3 h-3 bg-white bg-opacity-20 rounded-full"></div>
+              <div className="absolute bottom-2 right-2 w-3 h-3 bg-white bg-opacity-20 rounded-full"></div>
+              
+              {/* Sello de verificación */}
+              <div className="absolute -top-2 -right-2 w-12 h-12 bg-yellow-400 rounded-full flex items-center justify-center transform rotate-12 shadow-lg">
+                <Award className="w-6 h-6 text-yellow-900" />
+              </div>
+            </div>
+            
+            {/* Botón de descarga */}
+            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 rounded-lg transition-all duration-300 flex items-center justify-center">
+              <button
+                onClick={() => handleDownloadCertificate(cert)}
+                className="opacity-0 group-hover:opacity-100 transform scale-75 group-hover:scale-100 transition-all duration-300 bg-white text-gray-900 px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-lg hover:bg-gray-100"
+              >
+                <Download className="w-4 h-4" />
+                Descargar PDF
+              </button>
+            </div>
+            
+            {/* Badge de ganador */}
+            {cert.isWinner && (
+              <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                <div className="bg-yellow-400 text-yellow-900 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg">
+                  <Star className="w-3 h-3 fill-current" />
+                  GANADOR
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+    
+    {/* Información adicional */}
+    <div className="mt-6 p-4 bg-gray-700 border border-gray-600 rounded-lg">
+      <div className="flex items-start gap-3">
+        <Award className="w-5 h-5 text-yellow-400 mt-0.5" />
+        <div className="text-sm text-gray-300">
+          <p className="font-medium text-white mb-1">Sobre los certificados:</p>
+          <p>
+            • <strong>Certificados de participación:</strong> Reconocen tu participación en la game jam
+          </p>
+          <p>
+            • <strong>Reconocimientos especiales:</strong> Otorgados por destacar en categorías específicas
+          </p>
+          <p>
+            • <strong>Descarga en PDF:</strong> Perfectos para compartir en LinkedIn o tu portafolio profesional
+          </p>
+          <p className="mt-2 text-xs text-gray-400">
+            Los certificados son emitidos oficialmente por UTN Game Jam Hub y tienen validez académica.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
 
       {/* Publicaciones recientes */}
       {userPosts.length > 0 && (

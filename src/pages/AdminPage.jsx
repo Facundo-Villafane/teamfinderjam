@@ -13,6 +13,7 @@ import { ModerationTab } from '../components/admin/ModerationTab'
 import { JamEditor } from '../components/admin/JamEditor'
 import { ThemesTab } from '../components/admin/ThemesTab'
 import { ThemeEditor } from '../components/admin/ThemeEditor'
+import { CertificatesTab } from '../components/admin/CertificatesTab'
 import { MigrationTool } from '../components/admin/MigrationTool'
 
 // Importar funciones directamente para evitar problemas de importación
@@ -137,7 +138,7 @@ const AdminPage = ({ user }) => {
   const renderTabContent = () => {
     switch (currentTab) {
       case 'overview':
-        return <OverviewTab stats={stats} jams={jams} />
+        return <OverviewTab stats={stats} jams={jams} onRefresh={loadAllData} />
       
       case 'jams':
         return (
@@ -172,6 +173,14 @@ const AdminPage = ({ user }) => {
             onDeleteTheme={handleDeleteTheme}
             onToggleVoting={(jam) => handleToggleVoting(jam, loadAllData)}
             onSelectWinner={(theme) => handleSelectWinner(theme, loadAllData)}
+          />
+        )
+      
+      case 'certificates':
+        return (
+          <CertificatesTab 
+            currentJam={activeJam} 
+            onRefresh={loadAllData} 
           />
         )
       
