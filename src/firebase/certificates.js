@@ -20,7 +20,9 @@ import {
   
   // ===== GESTIÓN DE CERTIFICADOS =====
   
-  // Crear certificado completamente personalizado
+/**
+ * Función mejorada para crear certificados personalizados con todos los campos
+ */
 export const createCustomCertificate = async (userId, jamId, certificateData) => {
   try {
     // Obtener datos de la jam
@@ -31,22 +33,38 @@ export const createCustomCertificate = async (userId, jamId, certificateData) =>
     
     const jamData = jamDoc.data();
 
-    // Crear certificado personalizado
+    // CORRECCIÓN: Determinar correctamente si es certificado de reconocimiento
+    const isRecognitionCert = certificateData.isWinner === true || 
+                             certificateData.type === 'recognition' ||
+                             (certificateData.category && 
+                              certificateData.category !== 'participation' && 
+                              certificateData.category !== 'Participación');
+
+    console.log('Creating certificate:', {
+      userId,
+      category: certificateData.category,
+      isWinner: isRecognitionCert,
+      type: certificateData.type,
+      gameName: certificateData.gameName
+    });
+
+    // Crear certificado con todos los datos
     const certificateRef = await addDoc(collection(db, CERTIFICATES_COLLECTION), {
       userId,
       jamId,
       jamName: jamData.name,
       category: certificateData.category || 'participation',
-      isWinner: certificateData.isWinner || false,
-      
-      // Campos personalizados
-      customTitle: certificateData.title,
-      customSubtitle: certificateData.subtitle || null,
-      customMainText: certificateData.mainText,
+      isWinner: isRecognitionCert, // IMPORTANTE: esto determina el tipo
+      // Campos personalizados del Manual Certificate Creator
+      customTitle: certificateData.title || null,
+      customSubtitle: certificateData.subtitle || null, 
+      customMainText: certificateData.mainText || null,
       customSignature: certificateData.signature || null,
+      // Campos para reconocimientos
       gameName: certificateData.gameName || null,
-      
-      // Campos estándar
+      gameDescription: certificateData.gameDescription || null,
+      postId: certificateData.postId || null,
+      // Metadatos
       awardedDate: serverTimestamp(),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()

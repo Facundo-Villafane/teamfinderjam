@@ -202,6 +202,9 @@ export const CertificatesTab = ({ currentJam, onRefresh }) => {
     setPreviewCertificate(certificate);
   };
 
+  /**
+ * Función corregida para descargar certificados desde admin
+ */
   const handleDownloadCertificate = async (certificate) => {
     try {
       // Obtener información completa del usuario
@@ -211,22 +214,33 @@ export const CertificatesTab = ({ currentJam, onRefresh }) => {
         alert('El usuario debe completar su perfil para generar certificados válidos');
         return;
       }
-
+  
+      // CORRECCIÓN: Usar fecha correctamente
+      let certificateDate;
+      if (certificate.awardedDate) {
+        // Si es un Timestamp de Firestore
+        certificateDate = certificate.awardedDate.toDate ? certificate.awardedDate.toDate() : new Date(certificate.awardedDate);
+      } else {
+        certificateDate = new Date();
+      }
+  
       const certificateData = {
         userName: userProfile.fullName,
         jamName: certificate.jamName,
-        category: getCategoryName(certificate.category),
-        isWinner: certificate.isWinner,
-        date: certificate.awardedDate,
+        category: certificate.category, // Mantener categoría original
+        isWinner: certificate.isWinner, // Mantener valor original
+        date: certificateDate,
         certificateId: certificate.id,
         gameName: certificate.gameName || null,
-        // Campos personalizados
+        // Campos personalizados del Manual Certificate Creator
         customTitle: certificate.customTitle || null,
         customSubtitle: certificate.customSubtitle || null,
         customMainText: certificate.customMainText || null,
         customSignature: certificate.customSignature || null
       };
-
+  
+      console.log('Admin download certificate data:', certificateData); // Para debug
+  
       await generateCertificateWithCustomBackground(certificateData);
     } catch (error) {
       console.error('Error generating certificate:', error);

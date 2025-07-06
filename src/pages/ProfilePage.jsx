@@ -115,7 +115,30 @@ const ProfilePage = ({ user }) => {
 
   const formatDate = (date) => {
     if (!date) return 'Desconocido';
-    return new Date(date).toLocaleDateString('es-ES', {
+    
+    let dateObj;
+    
+    // Manejar diferentes tipos de fecha
+    if (date.toDate && typeof date.toDate === 'function') {
+      dateObj = date.toDate();
+    } else if (date instanceof Date) {
+      dateObj = date;
+    } else if (typeof date === 'string') {
+      dateObj = new Date(date);
+    } else if (typeof date === 'number') {
+      dateObj = new Date(date);
+    } else if (date.seconds) {
+      dateObj = new Date(date.seconds * 1000);
+    } else {
+      return 'Fecha inválida';
+    }
+    
+    // Verificar que la fecha sea válida
+    if (isNaN(dateObj.getTime())) {
+      return 'Fecha inválida';
+    }
+    
+    return dateObj.toLocaleDateString('es-ES', {
       year: 'numeric',
       month: 'long',
       day: 'numeric'
@@ -160,17 +183,63 @@ const ProfilePage = ({ user }) => {
       setShowEditor(true);
       return;
     }
-
+  
     try {
+      // CORRECCIÓN: Manejar fecha correctamente independientemente del formato
+      let certificateDate;
+      
+      if (certificate.awardedDate) {
+        // Si es un Timestamp de Firestore
+        if (certificate.awardedDate.toDate && typeof certificate.awardedDate.toDate === 'function') {
+          certificateDate = certificate.awardedDate.toDate();
+        }
+        // Si es una fecha JavaScript
+        else if (certificate.awardedDate instanceof Date) {
+          certificateDate = certificate.awardedDate;
+        }
+        // Si es un string de fecha
+        else if (typeof certificate.awardedDate === 'string') {
+          certificateDate = new Date(certificate.awardedDate);
+        }
+        // Si es un número (timestamp)
+        else if (typeof certificate.awardedDate === 'number') {
+          certificateDate = new Date(certificate.awardedDate);
+        }
+        // Si tiene seconds y nanoseconds (Timestamp object)
+        else if (certificate.awardedDate.seconds) {
+          certificateDate = new Date(certificate.awardedDate.seconds * 1000);
+        }
+        else {
+          // Fallback: usar fecha actual
+          certificateDate = new Date();
+        }
+      } else {
+        // Si no hay fecha, usar fecha actual
+        certificateDate = new Date();
+      }
+  
+      // Preparar datos del certificado
       const certificateData = {
         userName: userProfile?.fullName || user.displayName || 'Participante',
         jamName: certificate.jamName,
-        category: getCategoryName(certificate.category),
-        isWinner: certificate.isWinner,
-        date: certificate.awardedDate,
-        certificateId: certificate.id
+        category: certificate.category, // NO transformar aquí
+        isWinner: certificate.isWinner, // Usar el valor original
+        date: certificateDate,
+        certificateId: certificate.id,
+        gameName: certificate.gameName || null,
+        // Campos personalizados si existen
+        customTitle: certificate.customTitle || null,
+        customSubtitle: certificate.customSubtitle || null,
+        customMainText: certificate.customMainText || null,
+        customSignature: certificate.customSignature || null
       };
-
+  
+      console.log('Profile certificate data:', {
+        ...certificateData,
+        originalDate: certificate.awardedDate,
+        processedDate: certificateDate
+      }); // Para debug
+  
       await generateCertificateWithCustomBackground(certificateData);
     } catch (error) {
       console.error('Error generating PDF:', error);
