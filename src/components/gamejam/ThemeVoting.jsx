@@ -1,99 +1,146 @@
+// src/components/gamejam/ThemeVoting.jsx - Sistema de múltiples votos sin resultados
 import React, { useState, useEffect } from 'react';
 import { 
-  Vote, Trophy, Users, Clock, CheckCircle, Lock, AlertCircle, 
-  ChevronDown, ChevronUp, BarChart3, Eye, Edit3, Filter 
+  Vote, 
+  Trophy, 
+  AlertCircle, 
+  Clock, 
+  CheckCircle, 
+  Users,
+  Grid3X3,
+  List,
+  UserPlus,
+  Shield,
+  Star,
+  StarOff,
+  Info
 } from 'lucide-react';
 import { 
   getThemesByJam, 
-  getVotingResults, 
-  getUserVote, 
-  saveVote 
+  getUserVotes, 
+  addVote,
+  removeVote,
+  getRemainingVotes,
+  getVotingResults 
 } from '../../firebase/themes';
+import { useJamParticipation } from '../../hooks/useJamParticipation';
 
 export const ThemeVoting = ({ currentJam, user, onSignIn }) => {
   const [themes, setThemes] = useState([]);
-  const [userVote, setUserVote] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [userVotes, setUserVotes] = useState([]); // Array de IDs de temas votados
+  const [remainingVotes, setRemainingVotes] = useState(4);
   const [votingResults, setVotingResults] = useState({});
+  const [loading, setLoading] = useState(true);
   const [submittingVote, setSubmittingVote] = useState(false);
   const [expandedThemes, setExpandedThemes] = useState(new Set());
-  const [viewMode, setViewMode] = useState('grouped'); // 'grouped', 'list', 'results'
-  const [showResultsWidget, setShowResultsWidget] = useState(true);
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'grouped'
 
-  // Cargar temas y votos desde Firebase
+  // Hook de participación
+  const {
+    isJoined,
+    loading: participationLoading,
+    joining,
+    handleJoinJam,
+    canVote,
+    getRestrictionMessage
+  } = useJamParticipation(user, currentJam);
+
+  // Cargar datos de temas
   useEffect(() => {
-    if (currentJam?.id) {
-      loadThemes();
-      loadVotingResults();
-      if (user) {
-        loadUserVote();
-      } else {
-        setLoading(false);
-      }
-    }
-  }, [currentJam, user]);
+    loadThemeData();
+  }, [currentJam?.id]);
 
-  const loadThemes = async () => {
-    try {
-      const themesData = await getThemesByJam(currentJam.id);
-      setThemes(themesData || []);
-    } catch (error) {
-      console.error('Error loading themes:', error);
-      setThemes([]);
+  // Verificar votos del usuario cuando cambia el usuario o la jam
+  useEffect(() => {
+    if (user && currentJam?.id && isJoined) {
+      loadUserVotes();
+    } else {
+      setUserVotes([]);
+      setRemainingVotes(4);
     }
-  };
+  }, [user, currentJam?.id, isJoined]);
 
-  const loadVotingResults = async () => {
-    try {
-      const results = await getVotingResults(currentJam.id);
-      setVotingResults(results || {});
-    } catch (error) {
-      console.error('Error loading voting results:', error);
-      setVotingResults({});
+  const loadThemeData = async () => {
+    if (!currentJam?.id) {
+      setLoading(false);
+      return;
     }
-  };
 
-  const loadUserVote = async () => {
     try {
-      const vote = await getUserVote(user.uid, currentJam.id);
-      setUserVote(vote?.themeId || null);
+      setLoading(true);
+      const [themesData, resultsData] = await Promise.all([
+        getThemesByJam(currentJam.id),
+        getVotingResults(currentJam.id) // Solo muestra resultados si hay ganador
+      ]);
+      
+      setThemes(themesData);
+      setVotingResults(resultsData);
     } catch (error) {
-      console.error('Error loading user vote:', error);
-      setUserVote(null);
+      console.error('Error loading theme data:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleVote = async (themeId) => {
-    if (!user) {
-      if (window.confirm('Necesitas iniciar sesión para votar. ¿Quieres hacerlo ahora?')) {
-        onSignIn();
-      }
-      return;
+  const loadUserVotes = async () => {
+    try {
+      const votes = await getUserVotes(user.uid, currentJam.id);
+      const voteThemeIds = votes.map(vote => vote.themeId);
+      setUserVotes(voteThemeIds);
+      
+      const remaining = await getRemainingVotes(user.uid, currentJam.id);
+      setRemainingVotes(remaining);
+    } catch (error) {
+      console.error('Error loading user votes:', error);
     }
+  };
 
-    if (currentJam?.themeVotingClosed) {
-      alert('La votación ya está cerrada');
+  const handleVoteToggle = async (themeId) => {
+    if (!canVote()) {
+      const message = getRestrictionMessage('votar');
+      alert(message);
       return;
     }
 
     if (submittingVote) return;
 
+    const isCurrentlyVoted = userVotes.includes(themeId);
+
     try {
       setSubmittingVote(true);
-      await saveVote(user.uid, currentJam.id, themeId, userVote);
-      setUserVote(themeId);
-      await loadVotingResults();
+      
+      if (isCurrentlyVoted) {
+        // Remover voto
+        await removeVote(user.uid, currentJam.id, themeId);
+        setUserVotes(prev => prev.filter(id => id !== themeId));
+        setRemainingVotes(prev => prev + 1);
+      } else {
+        // Verificar si puede agregar más votos
+        if (remainingVotes <= 0) {
+          alert('Ya has usado todos tus votos (máximo 4). Remueve algún voto para votar por otro tema.');
+          return;
+        }
+        
+        // Agregar voto
+        await addVote(user.uid, currentJam.id, themeId);
+        setUserVotes(prev => [...prev, themeId]);
+        setRemainingVotes(prev => prev - 1);
+      }
+      
+      // Solo recargar resultados si hay un tema ganador (para mostrar resultados finales)
+      if (currentJam.selectedTheme) {
+        const newResults = await getVotingResults(currentJam.id);
+        setVotingResults(newResults);
+      }
     } catch (error) {
-      console.error('Error saving vote:', error);
-      alert('Error al guardar el voto. Intenta de nuevo.');
+      console.error('Error toggling vote:', error);
+      alert(error.message || 'Error al procesar el voto. Intenta de nuevo.');
     } finally {
       setSubmittingVote(false);
     }
   };
 
-  const toggleExpanded = (themeId) => {
+  const toggleThemeExpansion = (themeId) => {
     const newExpanded = new Set(expandedThemes);
     if (newExpanded.has(themeId)) {
       newExpanded.delete(themeId);
@@ -103,21 +150,19 @@ export const ThemeVoting = ({ currentJam, user, onSignIn }) => {
     setExpandedThemes(newExpanded);
   };
 
-  const getTotalVotes = () => {
-    return Object.values(votingResults).reduce((total, count) => total + count, 0);
-  };
-
+  // Cálculos
+  const totalUserVotes = userVotes.length;
+  const votingClosed = currentJam?.themeVotingClosed || false;
+  const winnerTheme = currentJam?.selectedTheme || null;
+  const groupedThemes = getThemesByCategory();
+  const showResults = winnerTheme !== null; // Solo mostrar resultados cuando hay ganador
+  
   const getVotePercentage = (themeId) => {
-    const total = getTotalVotes();
-    if (total === 0) return 0;
-    return Math.round(((votingResults[themeId] || 0) / total) * 100);
-  };
-
-  const getMostVotedTheme = () => {
-    if (Object.keys(votingResults).length === 0) return null;
-    return Object.entries(votingResults).reduce((max, [themeId, votes]) => {
-      return votes > (max.votes || 0) ? { themeId, votes, theme: themes.find(t => t.id === themeId) } : max;
-    }, {});
+    if (!showResults) return 0;
+    const totalVotes = Object.values(votingResults).reduce((sum, count) => sum + count, 0);
+    if (totalVotes === 0) return 0;
+    const votes = votingResults[themeId] || 0;
+    return Math.round((votes / totalVotes) * 100);
   };
 
   const getThemesByCategory = () => {
@@ -132,16 +177,56 @@ export const ThemeVoting = ({ currentJam, user, onSignIn }) => {
     return grouped;
   };
 
-  const getTopThemes = (limit = 5) => {
-    return themes
-      .map(theme => ({
-        ...theme,
-        votes: votingResults[theme.id] || 0,
-        percentage: getVotePercentage(theme.id)
-      }))
-      .filter(theme => theme.votes > 0)
-      .sort((a, b) => b.votes - a.votes)
-      .slice(0, limit);
+  // Renderizar botón de "Unirse para votar"
+  const renderJoinToVoteButton = () => {
+    if (!user) {
+      return (
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 text-center">
+          <div className="w-16 h-16 rounded-full bg-blue-900 flex items-center justify-center mx-auto mb-4">
+            <Vote className="w-8 h-8 text-blue-400" />
+          </div>
+          <h3 className="text-xl font-bold text-white mb-2">
+            ¡Únete a la Votación!
+          </h3>
+          <p className="text-gray-300 mb-4">
+            Inicia sesión para votar por tus temas favoritos (hasta 4 votos)
+          </p>
+          <button
+            onClick={onSignIn}
+            className="px-6 py-3 rounded-lg font-medium transition-colors text-white"
+            style={{ backgroundColor: '#0fc064' }}
+          >
+            Iniciar Sesión
+          </button>
+        </div>
+      );
+    }
+
+    if (!isJoined) {
+      return (
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 text-center">
+          <div className="w-16 h-16 rounded-full bg-orange-900 flex items-center justify-center mx-auto mb-4">
+            <UserPlus className="w-8 h-8 text-orange-400" />
+          </div>
+          <h3 className="text-xl font-bold text-white mb-2">
+            ¡Únete a la Jam para Votar!
+          </h3>
+          <p className="text-gray-300 mb-4">
+            Solo los participantes pueden votar por los temas (hasta 4 votos por persona)
+          </p>
+          <button
+            onClick={handleJoinJam}
+            disabled={joining}
+            className="px-6 py-3 rounded-lg font-medium transition-colors text-white disabled:opacity-50"
+            style={{ backgroundColor: '#0fc064' }}
+          >
+            {joining ? 'Uniéndose...' : 'Unirse a la Jam'}
+          </button>
+        </div>
+      );
+    }
+
+    return null;
   };
 
   // Estados de loading y error
@@ -155,7 +240,7 @@ export const ThemeVoting = ({ currentJam, user, onSignIn }) => {
     );
   }
 
-  if (loading) {
+  if (loading || participationLoading) {
     return (
       <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 mb-8">
         <div className="text-center text-gray-400">
@@ -172,113 +257,91 @@ export const ThemeVoting = ({ currentJam, user, onSignIn }) => {
         <Vote className="w-8 h-8 mx-auto mb-2 text-gray-400" />
         <p className="text-white mb-2">Aún no hay temas para votar</p>
         <p className="text-gray-400 text-sm">Los organizadores añadirán temas pronto</p>
-        {!user && (
-          <div className="mt-4 p-3 bg-blue-900 border border-blue-600 rounded-lg">
-            <p className="text-blue-200 text-sm mb-2">¿Quieres votar cuando estén disponibles?</p>
-            <button
-              onClick={onSignIn}
-              className="px-4 py-2 rounded-lg font-medium transition-colors text-white text-sm"
-              style={{ backgroundColor: '#0fc064' }}
-            >
-              Iniciar Sesión
-            </button>
-          </div>
-        )}
+        {renderJoinToVoteButton()}
       </div>
     );
   }
 
-  const totalVotes = getTotalVotes();
-  const mostVoted = getMostVotedTheme();
-  const votingClosed = currentJam?.themeVotingClosed;
-  const winnerTheme = currentJam?.selectedTheme;
-  const groupedThemes = getThemesByCategory();
-  const topThemes = getTopThemes();
-
-  // Si el usuario ya votó, mostrar vista de resultados simplificada
-  if (user && userVote && viewMode !== 'list') {
+  // Si el usuario no puede votar, mostrar el botón de unirse
+  if (!canVote()) {
     return (
       <div className="space-y-6">
-        {/* Header con voto actual */}
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 text-white">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <CheckCircle className="w-6 h-6 text-green-400" />
-              <h2 className="text-2xl font-bold">Tu Voto Registrado</h2>
-            </div>
-            <button
-              onClick={() => setViewMode('list')}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Edit3 className="w-4 h-4" />
-              Cambiar Voto
-            </button>
-          </div>
+        {/* Header informativo */}
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+          <h2 className="text-2xl font-bold text-white flex items-center gap-2 mb-4">
+            <Vote className="w-6 h-6" style={{ color: '#0fc064' }} />
+            Votación de Temas
+          </h2>
           
-          {/* Tema votado */}
-          {(() => {
-            const votedTheme = themes.find(t => t.id === userVote);
-            if (!votedTheme) return null;
-            
-            const voteCount = votingResults[userVote] || 0;
-            const percentage = getVotePercentage(userVote);
-            
-            return (
-              <div className="bg-green-900 bg-opacity-30 border border-green-600 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-bold text-lg">{votedTheme.title}</h3>
-                  <div className="text-right">
-                    <div className="text-lg font-bold text-green-400">{voteCount} votos</div>
-                    <div className="text-sm text-gray-400">{percentage}%</div>
-                  </div>
-                </div>
-                <p className="text-gray-300 text-sm">{votedTheme.description}</p>
-                {votedTheme.category && (
+          {/* Información sobre el sistema de votación */}
+          <div className="bg-blue-900 bg-opacity-30 border border-blue-600 rounded-lg p-4 mb-4">
+            <div className="flex items-start gap-3">
+              <Info className="w-5 h-5 text-blue-400 mt-0.5" />
+              <div className="text-blue-200 text-sm">
+                <p className="font-semibold mb-2">Nuevo Sistema de Votación:</p>
+                <ul className="space-y-1">
+                  <li>• Puedes votar por hasta <strong>4 temas diferentes</strong></li>
+                  <li>• Los resultados se mantienen en <strong>secreto</strong> hasta que se anuncie el ganador</li>
+                  <li>• Esto mantiene la sorpresa y evita ventajas antes de la jam</li>
+                  <li>• Puedes cambiar tus votos mientras la votación esté abierta</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          {/* Tema ganador si existe */}
+          {winnerTheme && (
+            <div className="bg-gradient-to-r from-yellow-900 to-orange-900 border border-yellow-600 rounded-lg p-4 mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Trophy className="w-5 h-5 text-yellow-400" />
+                <h3 className="font-bold text-yellow-200">¡Tema Ganador Revelado!</h3>
+              </div>
+              <h4 className="text-xl font-bold text-white">{winnerTheme.title}</h4>
+              <p className="text-yellow-100 text-sm mt-1">{winnerTheme.description}</p>
+            </div>
+          )}
+
+          <div className="text-gray-300 text-sm">
+            <p>Hay <strong>{themes.length} temas</strong> esperando por tu voto</p>
+            {votingClosed && (
+              <p className="text-red-300 mt-2">⚠️ La votación está cerrada</p>
+            )}
+          </div>
+        </div>
+
+        {/* Call to action */}
+        {renderJoinToVoteButton()}
+
+        {/* Vista previa de temas (sin votación) */}
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+          <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+            <Shield className="w-5 h-5 text-gray-400" />
+            Vista Previa de Temas
+          </h3>
+          <div className="space-y-3">
+            {themes.slice(0, 3).map((theme) => (
+              <div key={theme.id} className="border border-gray-600 rounded-lg p-4 opacity-75">
+                <h4 className="font-semibold text-gray-300">{theme.title}</h4>
+                <p className="text-gray-400 text-sm mt-1">
+                  {theme.description.length > 100 
+                    ? `${theme.description.substring(0, 100)}...` 
+                    : theme.description}
+                </p>
+                {theme.category && (
                   <span 
-                    className="inline-block mt-2 text-xs px-2 py-1 rounded-full text-white"
-                    style={{ backgroundColor: votedTheme.categoryColor || '#6B7280' }}
+                    className="inline-block text-xs px-2 py-1 rounded-full text-white font-medium mt-2"
+                    style={{ backgroundColor: theme.categoryColor || '#6B7280' }}
                   >
-                    {votedTheme.category}
+                    {theme.category}
                   </span>
                 )}
               </div>
-            );
-          })()}
-        </div>
-
-        {/* Resultados en tiempo real */}
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 text-white">
-          <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-            <BarChart3 className="w-5 h-5" style={{ color: '#0fc064' }} />
-            Resultados en Tiempo Real
-          </h3>
-          
-          <div className="space-y-3">
-            {topThemes.map((theme, index) => (
-              <div key={theme.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-700">
-                <div className="flex items-center gap-3">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                    index === 0 ? 'bg-yellow-500 text-white' : 'bg-gray-500 text-white'
-                  }`}>
-                    {index + 1}
-                  </div>
-                  <div>
-                    <h4 className="font-semibold">{theme.title}</h4>
-                    {theme.category && (
-                      <span className="text-xs text-gray-400">{theme.category}</span>
-                    )}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="font-bold">{theme.votes} votos</div>
-                  <div className="text-sm text-gray-400">{theme.percentage}%</div>
-                </div>
-              </div>
             ))}
-          </div>
-          
-          <div className="mt-4 text-center text-gray-400 text-sm">
-            Total de votos: {totalVotes}
+            {themes.length > 3 && (
+              <p className="text-gray-400 text-sm text-center">
+                Y {themes.length - 3} temas más... ¡Únete para ver todos y votar!
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -287,297 +350,217 @@ export const ThemeVoting = ({ currentJam, user, onSignIn }) => {
 
   return (
     <div className="space-y-6">
-      {/* Header principal */}
-      <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 text-white">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-          <div className="flex items-center gap-3">
+      {/* Header de votación */}
+      <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
             <Vote className="w-6 h-6" style={{ color: '#0fc064' }} />
-            <h2 className="text-2xl font-bold">
-              {votingClosed ? 'Tema Seleccionado' : 'Votación de Tema'}
-            </h2>
-          </div>
+            Votación de Temas
+          </h2>
           
           <div className="flex items-center gap-4">
-            {/* Selector de vista */}
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-gray-400" />
-              <select
-                value={viewMode}
-                onChange={(e) => setViewMode(e.target.value)}
-                className="bg-gray-700 text-white px-3 py-1 rounded text-sm border border-gray-600"
+            {/* Controles de vista */}
+            <div className="flex bg-gray-700 rounded-lg p-1">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-2 rounded transition-colors ${
+                  viewMode === 'list' ? 'bg-gray-600 text-white' : 'text-gray-400 hover:text-white'
+                }`}
               >
-                <option value="grouped">Por Categorías</option>
-                <option value="list">Lista Completa</option>
-              </select>
-            </div>
-            
-            <div className="flex items-center gap-2 text-gray-300">
-              <Users className="w-4 h-4" />
-              <span className="text-sm">{totalVotes} votos</span>
+                <List className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('grouped')}
+                className={`p-2 rounded transition-colors ${
+                  viewMode === 'grouped' ? 'bg-gray-600 text-white' : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <Grid3X3 className="w-4 h-4" />
+              </button>
             </div>
             
             {votingClosed && (
-              <div className="flex items-center gap-2 text-red-400">
-                <Lock className="w-4 h-4" />
-                <span className="text-sm">Votación cerrada</span>
+              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-red-900 border border-red-600">
+                <AlertCircle className="w-4 h-4 text-red-400" />
+                <span className="text-red-200 font-semibold">Votación cerrada</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Sistema de votos múltiples - Información */}
+        <div className="bg-blue-900 bg-opacity-30 border border-blue-600 rounded-lg p-4 mb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Star className="w-5 h-5 text-yellow-400" />
+              <div>
+                <h3 className="font-semibold text-blue-200">Tus votos: {totalUserVotes}/4</h3>
+                <p className="text-blue-300 text-sm">
+                  {remainingVotes > 0 
+                    ? `Te quedan ${remainingVotes} votos disponibles`
+                    : 'Has usado todos tus votos'
+                  }
+                </p>
+              </div>
+            </div>
+            
+            {!votingClosed && (
+              <div className="text-right">
+                <p className="text-blue-200 text-sm">
+                  Puedes votar por hasta 4 temas
+                </p>
+                <p className="text-blue-300 text-xs">
+                  Los resultados se revelarán al final
+                </p>
               </div>
             )}
           </div>
         </div>
 
         {/* Tema ganador */}
-        {votingClosed && winnerTheme && (
+        {winnerTheme && (
           <div className="bg-gradient-to-r from-yellow-900 to-orange-900 border border-yellow-600 rounded-lg p-4 mb-4">
             <div className="flex items-center gap-2 mb-2">
               <Trophy className="w-5 h-5 text-yellow-400" />
-              <h3 className="font-bold text-yellow-200">Tema Ganador</h3>
+              <h3 className="font-bold text-yellow-200">¡Tema Ganador Revelado!</h3>
             </div>
             <h4 className="text-xl font-bold text-white">{winnerTheme.title}</h4>
             <p className="text-yellow-100 text-sm mt-1">{winnerTheme.description}</p>
-          </div>
-        )}
-
-        {/* Widget de resultados en tiempo real */}
-        {totalVotes > 0 && mostVoted && (
-          <div className="bg-gradient-to-r from-blue-900 to-purple-900 border border-blue-600 rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <Trophy className="w-4 h-4 text-yellow-400" />
-                  <span className="text-sm font-medium text-blue-200">Líder Actual</span>
-                </div>
-                <h4 className="font-bold text-white">{mostVoted.theme?.title}</h4>
-                <p className="text-blue-200 text-sm">{mostVoted.votes} votos</p>
+            
+            {/* Mostrar resultados finales si hay ganador */}
+            {showResults && votingResults[winnerTheme.id] && (
+              <div className="mt-3 pt-3 border-t border-yellow-600">
+                <p className="text-yellow-200 text-sm">
+                  🏆 Resultado final: {votingResults[winnerTheme.id]} votos
+                </p>
               </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-white">
-                  {Math.round((mostVoted.votes / totalVotes) * 100)}%
-                </div>
-                <div className="text-blue-200 text-sm">del total</div>
-              </div>
-            </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Call to action para usuarios no logueados */}
-      {!user && !votingClosed && (
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 text-center">
-          <div className="w-16 h-16 rounded-full bg-blue-900 flex items-center justify-center mx-auto mb-4">
-            <Vote className="w-8 h-8 text-blue-400" />
-          </div>
-          <h3 className="text-xl font-bold text-white mb-2">
-            ¡Únete a la Votación!
-          </h3>
-          <p className="text-gray-300 mb-4">
-            Inicia sesión para votar por tu tema favorito y ayuda a decidir el tema de la jam
-          </p>
-          <button
-            onClick={onSignIn}
-            className="px-6 py-3 rounded-lg font-medium transition-colors text-white"
-            style={{ backgroundColor: '#0fc064' }}
-          >
-            Iniciar Sesión para Votar
-          </button>
-        </div>
-      )}
-
       {/* Lista de temas */}
-      {user && (
-        <div className="space-y-4">
-          {viewMode === 'grouped' ? (
-            // Vista agrupada por categorías
-            Object.entries(groupedThemes).map(([category, categoryThemes]) => (
-              <div key={category} className="bg-gray-800 border border-gray-700 rounded-lg p-6 text-white">
-                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                  <div 
-                    className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: categoryThemes[0]?.categoryColor || '#6B7280' }}
-                  />
-                  {category} ({categoryThemes.length})
-                </h3>
-                
-                <div className="space-y-3">
-                  {categoryThemes.map((theme) => {
-                    const voteCount = votingResults[theme.id] || 0;
-                    const percentage = getVotePercentage(theme.id);
-                    const isUserVote = userVote === theme.id;
-                    const isExpanded = expandedThemes.has(theme.id);
-                    const isClickable = !votingClosed && !submittingVote;
-
-                    return (
-                      <div
-                        key={theme.id}
-                        className={`border rounded-lg p-4 transition-all ${
-                          isUserVote ? 'border-green-500 bg-green-900 bg-opacity-20' : 'border-gray-600'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <h4 className="font-semibold">{theme.title}</h4>
-                              {isUserVote && <CheckCircle className="w-4 h-4 text-green-400" />}
-                            </div>
-                            
-                            {!isExpanded && (
-                              <p className="text-gray-400 text-sm line-clamp-1">
-                                {theme.description.length > 60 
-                                  ? `${theme.description.substring(0, 60)}...` 
-                                  : theme.description
-                                }
-                              </p>
-                            )}
-                          </div>
-                          
-                          <div className="flex items-center gap-3 ml-4">
-                            <div className="text-right">
-                              <div className="font-bold">{voteCount}</div>
-                              <div className="text-xs text-gray-400">{percentage}%</div>
-                            </div>
-                            
-                            {isClickable && (
-                              <button
-                                onClick={() => handleVote(theme.id)}
-                                disabled={submittingVote}
-                                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                                  isUserVote 
-                                    ? 'bg-green-600 text-white' 
-                                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                                }`}
-                              >
-                                {isUserVote ? 'Votado' : 'Votar'}
-                              </button>
-                            )}
-                            
-                            <button
-                              onClick={() => toggleExpanded(theme.id)}
-                              className="p-1 hover:bg-gray-700 rounded"
-                            >
-                              {isExpanded ? 
-                                <ChevronUp className="w-4 h-4" /> : 
-                                <ChevronDown className="w-4 h-4" />
-                              }
-                            </button>
-                          </div>
-                        </div>
-                        
-                        {isExpanded && (
-                          <div className="mt-3 pt-3 border-t border-gray-600">
-                            <p className="text-gray-300 text-sm leading-relaxed mb-2">
-                              {theme.description}
-                            </p>
-                            
-                            {voteCount > 0 && (
-                              <div className="w-full bg-gray-700 rounded-full h-2">
-                                <div
-                                  className="h-2 rounded-full transition-all duration-500"
-                                  style={{
-                                    width: `${percentage}%`,
-                                    backgroundColor: '#0fc064'
-                                  }}
-                                />
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))
-          ) : (
-            // Vista de lista completa (código similar al original pero más compacto)
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 text-white">
+      <div className="space-y-4">
+        {viewMode === 'grouped' ? (
+          // Vista agrupada por categorías
+          Object.entries(groupedThemes).map(([category, categoryThemes]) => (
+            <div key={category} className="bg-gray-800 border border-gray-700 rounded-lg p-6 text-white">
+              <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                <div 
+                  className="w-4 h-4 rounded-full"
+                  style={{ backgroundColor: categoryThemes[0]?.categoryColor || '#6B7280' }}
+                />
+                {category} ({categoryThemes.length})
+              </h3>
+              
               <div className="space-y-3">
-                {themes.map((theme) => {
-                  const voteCount = votingResults[theme.id] || 0;
-                  const percentage = getVotePercentage(theme.id);
-                  const isUserVote = userVote === theme.id;
+                {categoryThemes.map((theme) => {
+                  const isUserVoted = userVotes.includes(theme.id);
                   const isExpanded = expandedThemes.has(theme.id);
                   const isClickable = !votingClosed && !submittingVote;
+                  const voteCount = showResults ? (votingResults[theme.id] || 0) : 0;
+                  const percentage = showResults ? getVotePercentage(theme.id) : 0;
 
                   return (
                     <div
                       key={theme.id}
                       className={`border rounded-lg p-4 transition-all ${
-                        isUserVote ? 'border-green-500 bg-green-900 bg-opacity-20' : 'border-gray-600'
+                        isUserVoted ? 'border-green-500 bg-green-900 bg-opacity-20' : 'border-gray-600'
                       }`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <h4 className="font-semibold">{theme.title}</h4>
-                            {theme.category && (
-                              <span 
-                                className="text-xs px-2 py-1 rounded-full text-white"
-                                style={{ backgroundColor: theme.categoryColor || '#6B7280' }}
-                              >
-                                {theme.category}
-                              </span>
-                            )}
-                            {isUserVote && <CheckCircle className="w-4 h-4 text-green-400" />}
+                            {isUserVoted && <CheckCircle className="w-4 h-4 text-green-400" />}
                           </div>
                           
                           {!isExpanded && (
-                            <p className="text-gray-400 text-sm">
-                              {theme.description.length > 80 
-                                ? `${theme.description.substring(0, 80)}...` 
-                                : theme.description
-                              }
+                            <p className="text-gray-400 text-sm line-clamp-1">
+                              {theme.description.length > 60 
+                                ? `${theme.description.substring(0, 60)}...` 
+                                : theme.description}
                             </p>
                           )}
                         </div>
                         
-                        <div className="flex items-center gap-3 ml-4">
-                          <div className="text-right">
-                            <div className="font-bold">{voteCount}</div>
-                            <div className="text-xs text-gray-400">{percentage}%</div>
+                        {/* Solo mostrar conteo si hay ganador */}
+                        {showResults && (
+                          <div className="flex items-center gap-4">
+                            <div className="text-right">
+                              <div className="text-lg font-bold">{voteCount}</div>
+                              <div className="text-xs text-gray-400">votos</div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm font-semibold text-blue-400">{percentage}%</div>
+                            </div>
                           </div>
-                          
-                          {isClickable && (
-                            <button
-                              onClick={() => handleVote(theme.id)}
-                              disabled={submittingVote}
-                              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                                isUserVote 
-                                  ? 'bg-green-600 text-white' 
-                                  : 'bg-blue-600 text-white hover:bg-blue-700'
-                              }`}
-                            >
-                              {isUserVote ? 'Votado' : 'Votar'}
-                            </button>
-                          )}
-                          
-                          <button
-                            onClick={() => toggleExpanded(theme.id)}
-                            className="p-1 hover:bg-gray-700 rounded"
-                          >
-                            {isExpanded ? 
-                              <ChevronUp className="w-4 h-4" /> : 
-                              <ChevronDown className="w-4 h-4" />
-                            }
-                          </button>
-                        </div>
+                        )}
                       </div>
                       
                       {isExpanded && (
                         <div className="mt-3 pt-3 border-t border-gray-600">
-                          <p className="text-gray-300 text-sm leading-relaxed mb-2">
-                            {theme.description}
-                          </p>
-                          
-                          {voteCount > 0 && (
-                            <div className="w-full bg-gray-700 rounded-full h-2">
-                              <div
-                                className="h-2 rounded-full transition-all duration-500"
-                                style={{
-                                  width: `${percentage}%`,
-                                  backgroundColor: '#0fc064'
-                                }}
-                              />
-                            </div>
+                          <p className="text-gray-300 text-sm mb-3">{theme.description}</p>
+                          {theme.category && (
+                            <span 
+                              className="text-xs px-2 py-1 rounded-full text-white font-medium"
+                              style={{ backgroundColor: theme.categoryColor || '#6B7280' }}
+                            >
+                              {theme.category}
+                            </span>
                           )}
+                        </div>
+                      )}
+                      
+                      <div className="flex items-center justify-between mt-3">
+                        <button
+                          onClick={() => toggleThemeExpansion(theme.id)}
+                          className="text-blue-400 hover:text-blue-300 text-sm font-medium"
+                        >
+                          {isExpanded ? 'Ver menos' : 'Ver más'}
+                        </button>
+                        
+                        {isClickable && (
+                          <button
+                            onClick={() => handleVoteToggle(theme.id)}
+                            disabled={submittingVote || (!isUserVoted && remainingVotes <= 0)}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 ${
+                              isUserVoted 
+                                ? 'bg-green-600 text-white hover:bg-green-700' 
+                                : remainingVotes > 0
+                                ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                : 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                            }`}
+                          >
+                            {isUserVoted ? (
+                              <>
+                                <Star className="w-4 h-4 fill-current" />
+                                Votado
+                              </>
+                            ) : remainingVotes > 0 ? (
+                              <>
+                                <StarOff className="w-4 h-4" />
+                                {submittingVote ? 'Votando...' : 'Votar'}
+                              </>
+                            ) : (
+                              <>
+                                <StarOff className="w-4 h-4" />
+                                Sin votos
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                      
+                      {/* Barra de progreso solo si hay resultados */}
+                      {showResults && (
+                        <div className="w-full bg-gray-700 rounded-full h-1 mt-3">
+                          <div
+                            className={`h-1 rounded-full transition-all duration-500 ${
+                              isUserVoted ? 'bg-green-500' : 'bg-blue-500'
+                            }`}
+                            style={{ width: `${percentage}%` }}
+                          />
                         </div>
                       )}
                     </div>
@@ -585,7 +568,138 @@ export const ThemeVoting = ({ currentJam, user, onSignIn }) => {
                 })}
               </div>
             </div>
-          )}
+          ))
+        ) : (
+          // Vista de lista
+          themes.map((theme) => {
+            const isUserVoted = userVotes.includes(theme.id);
+            const isExpanded = expandedThemes.has(theme.id);
+            const isClickable = !votingClosed && !submittingVote;
+            const voteCount = showResults ? (votingResults[theme.id] || 0) : 0;
+            const percentage = showResults ? getVotePercentage(theme.id) : 0;
+
+            return (
+              <div
+                key={theme.id}
+                className={`bg-gray-800 border rounded-lg p-6 text-white transition-all ${
+                  isUserVoted ? 'border-green-500 bg-green-900 bg-opacity-20' : 'border-gray-700'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="text-xl font-bold">{theme.title}</h3>
+                      {isUserVoted && <CheckCircle className="w-5 h-5 text-green-400" />}
+                      {theme.category && (
+                        <span 
+                          className="text-xs px-2 py-1 rounded-full text-white font-medium"
+                          style={{ backgroundColor: theme.categoryColor || '#6B7280' }}
+                        >
+                          {theme.category}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <p className="text-gray-300 mb-3">
+                      {isExpanded || theme.description.length <= 150 
+                        ? theme.description 
+                        : `${theme.description.substring(0, 150)}...`}
+                    </p>
+                    
+                    {theme.description.length > 150 && (
+                      <button
+                        onClick={() => toggleThemeExpansion(theme.id)}
+                        className="text-blue-400 hover:text-blue-300 text-sm font-medium mb-3"
+                      >
+                        {isExpanded ? 'Ver menos' : 'Ver más'}
+                      </button>
+                    )}
+                  </div>
+                  
+                  <div className="flex flex-col items-end gap-2 ml-6">
+                    {/* Solo mostrar conteo si hay resultados */}
+                    {showResults && (
+                      <>
+                        <div className="text-right">
+                          <div className="text-2xl font-bold">{voteCount}</div>
+                          <div className="text-sm text-gray-400">votos</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-lg font-semibold text-blue-400">{percentage}%</div>
+                        </div>
+                      </>
+                    )}
+                    
+                    {isClickable && (
+                      <button
+                        onClick={() => handleVoteToggle(theme.id)}
+                        disabled={submittingVote || (!isUserVoted && remainingVotes <= 0)}
+                        className={`flex items-center gap-2 px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 ${
+                          isUserVoted 
+                            ? 'bg-green-600 text-white hover:bg-green-700' 
+                            : remainingVotes > 0
+                            ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                            : 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                        }`}
+                      >
+                        {isUserVoted ? (
+                          <>
+                            <Star className="w-4 h-4 fill-current" />
+                            Votado
+                          </>
+                        ) : remainingVotes > 0 ? (
+                          <>
+                            <StarOff className="w-4 h-4" />
+                            {submittingVote ? 'Votando...' : 'Votar'}
+                          </>
+                        ) : (
+                          <>
+                            <StarOff className="w-4 h-4" />
+                            Sin votos disponibles
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Barra de progreso solo si hay resultados */}
+                {showResults && (
+                  <div className="w-full bg-gray-700 rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full transition-all duration-500 ${
+                        isUserVoted ? 'bg-green-500' : 'bg-blue-500'
+                      }`}
+                      style={{ width: `${percentage}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Información adicional */}
+      {!votingClosed && (
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 text-white">
+          <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+            ℹ️ Sobre esta votación
+          </h3>
+          <div className="space-y-3 text-gray-300">
+            <p>
+              • <strong>Votos múltiples:</strong> Puedes votar por hasta 4 temas diferentes que te gusten.
+            </p>
+            <p>
+              • <strong>Resultados secretos:</strong> Los resultados no se muestran hasta que se anuncie el tema ganador.
+            </p>
+            <p>
+              • <strong>Cambiar votos:</strong> Puedes agregar o quitar votos mientras la votación esté abierta.
+            </p>
+            <p>
+              • <strong>Sorpresa garantizada:</strong> Nadie sabrá cuál es el tema hasta que comience la jam.
+            </p>
+          </div>
         </div>
       )}
     </div>

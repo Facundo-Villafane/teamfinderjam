@@ -1,11 +1,11 @@
-// src/hooks/useThemeActions.js - Hook para gestionar temas
+// src/hooks/useThemeActions.js - Hook actualizado para múltiples votos
 import { useState, useEffect } from 'react';
 import {
   createTheme,
   updateTheme,
   deleteTheme,
   getThemesByJam,
-  getVotingResults,
+  getAdminVotingResults,
   toggleVotingStatus,
   selectWinnerTheme
 } from '../firebase/themes';
@@ -29,13 +29,14 @@ export const useThemeActions = (user) => {
       setLoading(true);
       setCurrentJamId(jamId);
       
-      const [themesData, votingData] = await Promise.all([
+      const [themesData, adminResults] = await Promise.all([
         getThemesByJam(jamId),
-        getVotingResults(jamId)
+        getAdminVotingResults(jamId)
       ]);
       
       setThemes(themesData);
-      setVotingResults(votingData);
+      // Para admins, siempre mostrar resultados completos
+      setVotingResults(adminResults.results || {});
     } catch (error) {
       console.error('Error loading theme data:', error);
       setThemes([]);
@@ -113,11 +114,17 @@ export const useThemeActions = (user) => {
 
   // Seleccionar tema ganador
   const handleSelectWinner = async (theme) => {
-    if (window.confirm(`¿Confirmar "${theme.title}" como tema ganador? Esto cerrará la votación automáticamente.`)) {
+    const voteCount = votingResults[theme.id] || 0;
+    
+    if (window.confirm(
+      `¿Confirmar "${theme.title}" como tema ganador?\n\n` +
+      `Este tema tiene ${voteCount} votos.\n` +
+      `Esto revelará los resultados a todos los usuarios y cerrará la votación automáticamente.`
+    )) {
       try {
         await selectWinnerTheme(currentJamId, theme);
         await loadThemeData(currentJamId);
-        alert('Tema ganador seleccionado exitosamente!');
+        alert('Tema ganador seleccionado exitosamente! Los resultados ahora son visibles para todos.');
       } catch (error) {
         console.error('Error selecting winner:', error);
         alert('Error al seleccionar el tema ganador.');

@@ -14,6 +14,7 @@ import { ModerationTab } from '../components/admin/ModerationTab'
 import { JamEditor } from '../components/admin/JamEditor'
 import { ThemesTab } from '../components/admin/ThemesTab'
 import { ThemeEditor } from '../components/admin/ThemeEditor'
+import { MigrationTool } from '../components/admin/MigrationTool';
 
 const AdminPage = ({ user }) => {
   const [currentTab, setCurrentTab] = useState('overview')
@@ -98,7 +99,14 @@ const AdminPage = ({ user }) => {
             onToggleVoting={handleToggleVoting}
             onSelectWinner={handleSelectWinner}
           />
-        )
+            )
+        case 'migration':
+            return (
+                <MigrationTool 
+                currentJam={activeJam} 
+                onRefresh={loadAllData} 
+                />
+            );
       default:
         return null
     }

@@ -14,7 +14,7 @@ import { AppHeader } from './gamejam/AppHeader';
 import { JamBanner } from './gamejam/JamBanner';
 import { Navigation } from './gamejam/Navigation';
 import { PostsGrid } from './gamejam/PostsGrid';
-import { CreatePostForm } from './gamejam/CreatePostForm';
+import { CreatePostFormWrapper } from '../components/gamejam/CreatePostFormWrapper';
 
 const GameJamApp = () => {
   const [currentView, setCurrentView] = useState('browse');
@@ -148,19 +148,22 @@ const GameJamApp = () => {
             onDeletePost={handleDeletePost}
           />
         ) : user ? (
-          <CreatePostForm
-            currentPost={editingPost || newPost}
-            isEditing={!!editingPost}
-            onFieldChange={handleFieldChange}
-            onSkillToggle={handleSkillToggle}
-            onToolToggle={handleToolToggle}
-            onSubmit={handleSubmit}
-            onCancel={handleCancelEditClick}
-            submitting={submitting}
-            skillOptions={skillOptions}
-            toolOptions={toolOptions}
-            timezoneOptions={timezoneOptions}
-          />
+            <CreatePostFormWrapper
+                user={user}
+                currentJam={currentJam}
+                onSignIn={handleSignIn}
+                currentPost={editingPost || newPost}
+                isEditing={!!editingPost}
+                onFieldChange={handleFieldChange}
+                onSkillToggle={handleSkillToggle}
+                onToolToggle={handleToolToggle}
+                onSubmit={handleSubmit}
+                onCancel={handleCancelEditClick}
+                submitting={submitting}
+                skillOptions={skillOptions}
+                toolOptions={toolOptions}
+                timezoneOptions={timezoneOptions}
+                />
         ) : (
           <div className="text-center text-gray-300 py-12">
             <p className="text-xl mb-4">Necesitas iniciar sesión para crear una publicación</p>

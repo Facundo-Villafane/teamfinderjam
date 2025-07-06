@@ -1,58 +1,118 @@
-import React, { useState, useEffect } from 'react'
-import { User, Calendar, Mail, ExternalLink, Edit3, Crown } from 'lucide-react'
-import { getPostsByUser } from '../firebase/firestore'
+// src/pages/ProfilePage.jsx - Actualizado con participación en jams
+import React, { useState, useEffect } from 'react';
+import { 
+  User, 
+  Calendar, 
+  Mail, 
+  ExternalLink, 
+  Edit3, 
+  Crown, 
+  Trophy,
+  Users,
+  Clock,
+  CheckCircle,
+  Play
+} from 'lucide-react';
+import { getPostsByUser } from '../firebase/firestore';
+import { getUserJamHistory } from '../firebase/participants';
+import { useJamParticipation } from '../hooks/useJamParticipation';
 
-const ProfilePage = ({ user }) => {
-  const [userPosts, setUserPosts] = useState([])
-  const [loading, setLoading] = useState(true)
+const ProfilePage = ({ user, currentJam }) => {
+  const [userPosts, setUserPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalPosts: 0,
     totalJamsParticipated: 0,
     memberSince: null
-  })
+  });
+  const [jamHistory, setJamHistory] = useState([]);
 
-  const adminEmails = ['facundo.tnd@gmail.com', 'admin@example.com']
-  const isAdmin = user && adminEmails.includes(user.email)
+  // Hook de participación para la jam actual
+  const { isJoined: isJoinedCurrentJam } = useJamParticipation(user, currentJam);
+
+  const adminEmails = ['facundo.tnd@gmail.com', 'admin@example.com'];
+  const isAdmin = user && adminEmails.includes(user.email);
 
   useEffect(() => {
-    loadUserData()
-  }, [user])
+    loadUserData();
+  }, [user]);
 
   const loadUserData = async () => {
-    if (!user) return
+    if (!user) return;
 
     try {
-      setLoading(true)
-      const posts = await getPostsByUser(user.uid)
-      setUserPosts(posts)
+      setLoading(true);
+      
+      // Cargar posts del usuario
+      const posts = await getPostsByUser(user.uid);
+      setUserPosts(posts);
+
+      // Cargar historial de jams
+      const history = await getUserJamHistory(user.uid);
+      setJamHistory(history);
 
       // Calcular estadísticas
-      const uniqueJams = new Set(posts.map(post => post.edition))
+      // Para mantener compatibilidad, también contamos jams únicas de posts
+      const uniqueJamsFromPosts = new Set(posts.map(post => post.edition));
+      const uniqueJamsFromParticipation = history.length;
+      
+      // Usar el número mayor (para casos de migración parcial)
+      const totalJamsParticipated = Math.max(
+        uniqueJamsFromPosts.size,
+        uniqueJamsFromParticipation
+      );
+
       setStats({
         totalPosts: posts.length,
-        totalJamsParticipated: uniqueJams.size,
-        memberSince: user.metadata?.creationTime ? new Date(user.metadata.creationTime) : null
-      })
+        totalJamsParticipated,
+        memberSince: user.metadata?.creationTime ? 
+          new Date(user.metadata.creationTime) : null
+      });
     } catch (error) {
-      console.error('Error loading user data:', error)
+      console.error('Error loading user data:', error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const createItchLink = (username) => {
-    if (!username) return null
-    if (username.includes('http')) return username
-    const cleanUsername = username.replace('.itch.io', '')
-    return `https://${cleanUsername}.itch.io`
-  }
+    if (!username) return null;
+    if (username.includes('http')) return username;
+    const cleanUsername = username.replace('.itch.io', '');
+    return `https://${cleanUsername}.itch.io`;
+  };
+
+  const formatDate = (date) => {
+    if (!date) return 'Desconocido';
+    return new Date(date).toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  const getJamStatusIcon = (jam) => {
+    if (!jam.active) return { icon: Clock, color: 'text-gray-400', text: 'Finalizada' };
+    
+    const today = new Date();
+    const startDate = new Date(jam.startDate);
+    const endDate = new Date(jam.endDate);
+    
+    if (today >= startDate && today <= endDate) {
+      return { icon: Play, color: 'text-green-400', text: 'En vivo' };
+    } else if (today < startDate) {
+      return { icon: Clock, color: 'text-yellow-400', text: 'Próximamente' };
+    } else {
+      return { icon: CheckCircle, color: 'text-blue-400', text: 'Completada' };
+    }
+  };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-white text-xl">Cargando perfil...</div>
       </div>
-    )
+    );
   }
 
   return (
@@ -72,6 +132,27 @@ const ProfilePage = ({ user }) => {
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-yellow-900 border border-yellow-600 mb-4">
             <Crown className="w-4 h-4 text-yellow-400" />
             <span className="text-yellow-200 font-semibold">Administrador</span>
+          </div>
+        )}
+
+        {/* Estado de participación en jam actual */}
+        {currentJam && (
+          <div className="mb-4">
+            {isJoinedCurrentJam ? (
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-900 border border-green-600">
+                <CheckCircle className="w-4 h-4 text-green-400" />
+                <span className="text-green-200 font-semibold">
+                  Participando en {currentJam.name}
+                </span>
+              </div>
+            ) : (
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gray-700 border border-gray-600">
+                <Clock className="w-4 h-4 text-gray-400" />
+                <span className="text-gray-300">
+                  No participando en {currentJam.name}
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -94,147 +175,158 @@ const ProfilePage = ({ user }) => {
         
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 text-center">
           <div className="text-lg font-bold mb-2 text-blue-400">
-            {stats.memberSince ? stats.memberSince.toLocaleDateString() : 'N/A'}
+            {stats.memberSince ? 
+              formatDate(stats.memberSince).split(' ').slice(-1)[0] : // Solo el año
+              'Desconocido'
+            }
           </div>
           <p className="text-gray-300">Miembro Desde</p>
         </div>
       </div>
 
-      {/* Información del perfil */}
-      <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
-        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-          <User className="w-5 h-5" style={{ color: '#0fc064' }} />
-          Información del Perfil
-        </h3>
-        
-        <div className="space-y-4 text-gray-300">
-          <div className="flex items-center gap-3">
-            <Mail className="w-4 h-4 text-gray-400" />
-            <span>Email: {user.email}</span>
-          </div>
+      {/* Historial de Jams */}
+      {jamHistory.length > 0 && (
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+          <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+            <Trophy className="w-6 h-6" style={{ color: '#0fc064' }} />
+            Historial de Game Jams
+          </h2>
           
-          <div className="flex items-center gap-3">
-            <Calendar className="w-4 h-4 text-gray-400" />
-            <span>
-              Cuenta creada: {stats.memberSince ? stats.memberSince.toLocaleDateString('es-ES', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-              }) : 'No disponible'}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <ExternalLink className="w-4 h-4 text-gray-400" />
-            <span>Proveedor: Google</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Historial de publicaciones */}
-      <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
-        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-          <Edit3 className="w-5 h-5" style={{ color: '#0fc064' }} />
-          Mis Publicaciones ({userPosts.length})
-        </h3>
-        
-        {userPosts.length === 0 ? (
-          <div className="text-center text-gray-400 py-8">
-            <p className="text-lg mb-2">Aún no has creado ninguna publicación</p>
-            <p className="text-sm">¡Ve al Team Finder y crea tu primera publicación!</p>
-            <a 
-              href="/teamfinder" 
-              className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-lg font-medium transition-colors text-white hover:opacity-90"
-              style={{ backgroundColor: '#0fc064' }}
-            >
-              Ir al Team Finder
-            </a>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {userPosts.map((post) => (
-              <div key={post.id} className="border border-gray-600 rounded-lg p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <a
-                        href={createItchLink(post.username)}
-                        target="_blank"
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {jamHistory.map((jam) => {
+              const status = getJamStatusIcon(jam);
+              const StatusIcon = status.icon;
+              
+              return (
+                <div 
+                  key={jam.id} 
+                  className="bg-gray-700 border border-gray-600 rounded-lg p-4 hover:bg-gray-650 transition-colors"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <h3 className="font-bold text-white text-lg mb-1">{jam.name}</h3>
+                      <p className="text-gray-300 text-sm">{jam.description}</p>
+                    </div>
+                    {jam.bannerUrl && (
+                      <img 
+                        src={jam.bannerUrl} 
+                        alt={jam.name}
+                        className="w-16 h-8 object-cover rounded ml-3"
+                      />
+                    )}
+                  </div>
+                  
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center gap-2">
+                      <StatusIcon className={`w-4 h-4 ${status.color}`} />
+                      <span className="text-gray-300">{status.text}</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-gray-400" />
+                      <span className="text-gray-300">
+                        {jam.startDate} → {jam.endDate}
+                      </span>
+                    </div>
+                    
+                    {jam.selectedTheme && (
+                      <div className="flex items-center gap-2">
+                        <Trophy className="w-4 h-4 text-yellow-400" />
+                        <span className="text-gray-300">Tema: {jam.selectedTheme.title}</span>
+                      </div>
+                    )}
+                    
+                    <div className="flex items-center gap-2">
+                      <Users className="w-4 h-4 text-gray-400" />
+                      <span className="text-gray-300">
+                        Te uniste el {formatDate(jam.joinedAt)}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {jam.jamLink && (
+                    <div className="mt-3 pt-3 border-t border-gray-600">
+                      <a 
+                        href={jam.jamLink} 
+                        target="_blank" 
                         rel="noopener noreferrer"
-                        className="font-bold hover:underline flex items-center gap-1"
-                        style={{ color: '#0fc064' }}
+                        className="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm font-medium"
                       >
-                        {post.username}
                         <ExternalLink className="w-3 h-3" />
+                        Ver página oficial
                       </a>
                     </div>
-                    <p className="text-gray-300 text-sm mb-2">{post.description}</p>
-                  </div>
-                  
-                  <div className="text-right text-sm text-gray-400">
-                    <div>{post.edition}</div>
-                    <div>{post.createdAt?.toLocaleDateString()}</div>
-                  </div>
+                  )}
                 </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {post.canDo && post.canDo.length > 0 && (
-                    <div>
-                      <h5 className="text-sm font-semibold text-gray-400 mb-1">Puede hacer:</h5>
-                      <div className="flex flex-wrap gap-1">
-                        {post.canDo.map(skill => (
-                          <span key={skill} className="text-xs px-2 py-1 rounded-full text-white" 
-                                style={{ backgroundColor: '#0fc064' }}>
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Publicaciones recientes */}
+      {userPosts.length > 0 && (
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+          <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+            <Edit3 className="w-6 h-6" style={{ color: '#0fc064' }} />
+            Publicaciones Recientes
+          </h2>
+          
+          <div className="space-y-4">
+            {userPosts.slice(0, 5).map((post) => (
+              <div key={post.id} className="bg-gray-700 border border-gray-600 rounded-lg p-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-white mb-2">{post.edition}</h3>
+                    <p className="text-gray-300 text-sm mb-3 line-clamp-2">
+                      {post.description}
+                    </p>
+                    
+                    <div className="flex items-center gap-4 text-xs text-gray-400">
+                      <span>{formatDate(post.createdAt?.toDate())}</span>
+                      {post.username && (
+                        <a 
+                          href={createItchLink(post.username)} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          {post.username}.itch.io
+                        </a>
+                      )}
                     </div>
-                  )}
-                  
-                  {post.lookingFor && post.lookingFor.length > 0 && (
-                    <div>
-                      <h5 className="text-sm font-semibold text-gray-400 mb-1">Busca:</h5>
-                      <div className="flex flex-wrap gap-1">
-                        {post.lookingFor.map(skill => (
-                          <span key={skill} className="text-xs px-2 py-1 rounded-full bg-gray-600 text-gray-300">
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  </div>
                 </div>
               </div>
             ))}
+            
+            {userPosts.length > 5 && (
+              <p className="text-gray-400 text-sm text-center">
+                Y {userPosts.length - 5} publicaciones más...
+              </p>
+            )}
           </div>
-        )}
-      </div>
-
-      {/* Acciones rápidas */}
-      <div className="bg-gradient-to-r from-blue-900 to-purple-900 border border-blue-600 rounded-lg p-6">
-        <h3 className="text-xl font-bold text-white mb-4 text-center">
-          🚀 Acciones Rápidas
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <a 
-            href="/teamfinder" 
-            className="flex items-center justify-center gap-2 p-4 rounded-lg font-medium transition-colors text-white hover:opacity-90"
-            style={{ backgroundColor: '#0fc064' }}
-          >
-            🔍 Buscar Equipos
-          </a>
-          {/*<a 
-            href="/voting" 
-            className="flex items-center justify-center gap-2 p-4 rounded-lg font-medium transition-colors text-white hover:opacity-90"
-            style={{ backgroundColor: '#8B5CF6' }}
-          >
-            🗳️ Votar Temas
-          </a>*/}
         </div>
-      </div>
-    </div>
-  )
-}
+      )}
 
-export default ProfilePage
+      {/* Mensaje si no hay actividad */}
+      {userPosts.length === 0 && jamHistory.length === 0 && (
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-8 text-center">
+          <Users className="w-16 h-16 text-gray-500 mx-auto mb-4" />
+          <h3 className="text-xl font-bold text-white mb-2">¡Aún no hay actividad!</h3>
+          <p className="text-gray-300 mb-4">
+            Participa en una jam y crea tu primera publicación para buscar equipo
+          </p>
+          {currentJam && !isJoinedCurrentJam && (
+            <p className="text-gray-400 text-sm">
+              Únete a <strong>{currentJam.name}</strong> para empezar tu aventura
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ProfilePage;

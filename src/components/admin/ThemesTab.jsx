@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
-import { Plus, Edit3, Trash2, Vote, Trophy, Lock, Unlock, BarChart3, Calendar, Users } from 'lucide-react';
+// src/components/admin/ThemesTab.jsx - Actualizado para múltiples votos
+import React, { useState, useEffect } from 'react';
+import { Plus, Edit3, Trash2, Vote, Trophy, Lock, Unlock, BarChart3, Calendar, Users, Star, Info } from 'lucide-react';
+import { getAdminVotingResults, getVotingStats } from '../../firebase/themes';
 
 export const ThemesTab = ({ 
   currentJam, 
   themes, 
-  votingResults,
+  votingResults, // Este ahora viene de getAdminVotingResults
   onCreateTheme, 
   onEditTheme, 
   onDeleteTheme,
@@ -12,9 +14,30 @@ export const ThemesTab = ({
   onSelectWinner
 }) => {
   const [showResults, setShowResults] = useState(false);
+  const [votingStats, setVotingStats] = useState({
+    totalVotes: 0,
+    uniqueVoters: 0,
+    maxVotesPerUser: 4
+  });
+
+  // Cargar estadísticas adicionales
+  useEffect(() => {
+    if (currentJam?.id) {
+      loadVotingStats();
+    }
+  }, [currentJam?.id, votingResults]);
+
+  const loadVotingStats = async () => {
+    try {
+      const stats = await getVotingStats(currentJam.id);
+      setVotingStats(stats);
+    } catch (error) {
+      console.error('Error loading voting stats:', error);
+    }
+  };
 
   const getTotalVotes = () => {
-    return Object.values(votingResults || {}).reduce((total, count) => total + count, 0);
+    return votingStats.totalVotes || Object.values(votingResults || {}).reduce((total, count) => total + count, 0);
   };
 
   const getVotePercentage = (themeId) => {
@@ -43,6 +66,7 @@ export const ThemesTab = ({
 
   const totalVotes = getTotalVotes();
   const sortedThemes = getSortedThemesByVotes();
+  const hasWinner = currentJam?.selectedTheme !== null;
 
   return (
     <div className="space-y-6">
@@ -50,16 +74,20 @@ export const ThemesTab = ({
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div>
           <h3 className="text-xl font-bold text-white">Gestión de Temas</h3>
-          <p className="text-gray-600 flex items-center gap-4 mt-1">
+          <div className="flex items-center gap-4 mt-1 text-gray-600">
             <span className="flex items-center gap-1">
               <Vote className="w-4 h-4" />
               {themes.length} temas
             </span>
             <span className="flex items-center gap-1">
               <Users className="w-4 h-4" />
-              {totalVotes} votos totales
+              {totalVotes} votos • {votingStats.uniqueVoters} votantes
             </span>
-          </p>
+            <span className="flex items-center gap-1">
+              <Star className="w-4 h-4" />
+              Promedio: {votingStats.uniqueVoters > 0 ? (totalVotes / votingStats.uniqueVoters).toFixed(1) : '0'}/persona
+            </span>
+          </div>
           <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium" 
                style={{ backgroundColor: '#0fc064', color: 'white' }}>
             <Calendar className="w-3 h-3" />
@@ -102,16 +130,41 @@ export const ThemesTab = ({
         </div>
       </div>
 
+      {/* Información sobre el sistema de votación */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="flex items-start gap-3">
+          <Info className="w-5 h-5 text-blue-500 mt-0.5" />
+          <div className="text-blue-800">
+            <h4 className="font-semibold mb-1">Sistema de Votación Múltiple Activo</h4>
+            <div className="text-sm text-blue-700 space-y-1">
+              <p>• Cada usuario puede votar por hasta {votingStats.maxVotesPerUser} temas diferentes</p>
+              <p>• Los resultados están {hasWinner ? 'VISIBLES' : 'OCULTOS'} para los usuarios</p>
+              <p>• {hasWinner ? 'Ya se seleccionó un ganador' : 'Selecciona un ganador para revelar resultados'}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Vista de Resultados */}
       {showResults ? (
         <div className="space-y-4">
           <div className="bg-white rounded-xl p-6 shadow-lg border">
-            <h4 className="font-bold text-lg mb-4 flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-yellow-500 flex items-center justify-center">
-                <Trophy className="w-4 h-4 text-white" />
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="font-bold text-lg flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-yellow-500 flex items-center justify-center">
+                  <Trophy className="w-4 h-4 text-white" />
+                </div>
+                Resultados de Votación (Panel Admin)
+              </h4>
+              
+              <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                hasWinner 
+                  ? 'bg-green-100 text-green-800' 
+                  : 'bg-orange-100 text-orange-800'
+              }`}>
+                {hasWinner ? '👁️ Resultados Públicos' : '🔒 Resultados Ocultos'}
               </div>
-              Resultados de Votación
-            </h4>
+            </div>
             
             {totalVotes === 0 ? (
               <div className="text-center py-12">
@@ -126,7 +179,8 @@ export const ThemesTab = ({
                 {sortedThemes.map((theme, index) => {
                   const votes = votingResults[theme.id] || 0;
                   const percentage = getVotePercentage(theme.id);
-                  const isWinner = index === 0 && votes > 0;
+                  const isTopChoice = index === 0 && votes > 0;
+                  const isWinner = hasWinner && currentJam.selectedTheme?.id === theme.id;
                   
                   return (
                     <div
@@ -134,18 +188,22 @@ export const ThemesTab = ({
                       className={`border-2 rounded-xl p-4 transition-all duration-200 ${
                         isWinner 
                           ? 'border-yellow-400 bg-gradient-to-r from-yellow-50 to-orange-50 shadow-lg' 
+                          : isTopChoice
+                          ? 'border-green-400 bg-green-50'
                           : 'border-gray-200 hover:border-gray-300'
                       }`}
                     >
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-white ${
-                            isWinner ? 'bg-yellow-500' : 'bg-gray-500'
+                            isWinner ? 'bg-yellow-500' : 
+                            isTopChoice ? 'bg-green-500' : 'bg-gray-500'
                           }`}>
                             #{index + 1}
                           </div>
                           <h5 className="font-bold text-lg">{theme.title}</h5>
                           {isWinner && <Trophy className="w-5 h-5 text-yellow-500" />}
+                          {isTopChoice && !isWinner && <Star className="w-5 h-5 text-green-500" />}
                         </div>
                         
                         <div className="flex items-center gap-4">
@@ -157,7 +215,7 @@ export const ThemesTab = ({
                             <div className="text-lg font-semibold text-blue-600">{percentage}%</div>
                           </div>
                           
-                          {!currentJam.selectedTheme && isWinner && votes > 0 && (
+                          {!hasWinner && votes > 0 && (
                             <button
                               onClick={() => onSelectWinner(theme)}
                               className="bg-yellow-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-yellow-700 transition-colors font-semibold"
@@ -165,13 +223,21 @@ export const ThemesTab = ({
                               Seleccionar Ganador
                             </button>
                           )}
+                          
+                          {isWinner && (
+                            <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-yellow-600 text-white">
+                              <Trophy className="w-4 h-4" />
+                              <span className="font-semibold">Ganador</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                       
                       <div className="w-full bg-gray-200 rounded-full h-3 mb-3">
                         <div
                           className={`h-3 rounded-full transition-all duration-500 ${
-                            isWinner ? 'bg-gradient-to-r from-yellow-400 to-orange-500' : 'bg-blue-500'
+                            isWinner ? 'bg-gradient-to-r from-yellow-400 to-orange-500' : 
+                            isTopChoice ? 'bg-green-500' : 'bg-blue-500'
                           }`}
                           style={{ width: `${percentage}%` }}
                         />
@@ -199,7 +265,7 @@ export const ThemesTab = ({
         /* Vista de Lista */
         <div className="space-y-4">
           {/* Tema ganador */}
-          {currentJam.selectedTheme && (
+          {hasWinner && (
             <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-400 rounded-xl p-6 shadow-lg">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-10 h-10 rounded-lg bg-yellow-500 flex items-center justify-center">
@@ -208,7 +274,10 @@ export const ThemesTab = ({
                 <h4 className="font-bold text-lg text-yellow-800">Tema Ganador Seleccionado</h4>
               </div>
               <h5 className="font-bold text-xl mb-2">{currentJam.selectedTheme.title}</h5>
-              <p className="text-yellow-700">{currentJam.selectedTheme.description}</p>
+              <p className="text-yellow-700 mb-2">{currentJam.selectedTheme.description}</p>
+              <div className="text-yellow-600 text-sm">
+                🏆 Resultado final: {votingResults[currentJam.selectedTheme.id] || 0} votos
+              </div>
             </div>
           )}
           
@@ -243,6 +312,11 @@ export const ThemesTab = ({
                           {theme.category}
                         </span>
                       )}
+                      {hasWinner && currentJam.selectedTheme?.id === theme.id && (
+                        <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-800 font-medium">
+                          🏆 Ganador
+                        </span>
+                      )}
                     </div>
                     <p className="text-gray-600 mb-4 leading-relaxed">{theme.description}</p>
                     
@@ -255,6 +329,12 @@ export const ThemesTab = ({
                         <Users className="w-3 h-3" />
                         Votos: {votingResults[theme.id] || 0}
                       </span>
+                      {hasWinner && (
+                        <span className="flex items-center gap-1">
+                          <BarChart3 className="w-3 h-3" />
+                          {getVotePercentage(theme.id)}%
+                        </span>
+                      )}
                     </div>
                   </div>
                   
