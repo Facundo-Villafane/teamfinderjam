@@ -406,7 +406,7 @@ const ProfilePage = ({ user }) => {
                       className="p-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg transition-colors"
                       title="Vista previa"
                     >
-                      <Eye className="w-4 h-4" />
+                      <Eye className="w-4 h-4 text-gray-800" />
                     </button>
                     
                     <button
@@ -415,7 +415,7 @@ const ProfilePage = ({ user }) => {
                       title="Descargar PDF"
                       disabled={!profileComplete}
                     >
-                      <Download className="w-4 h-4" />
+                      <Download className="w-4 h-4 text-gray-800" />
                     </button>
                   </div>
                 </div>

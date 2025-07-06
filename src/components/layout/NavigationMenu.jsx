@@ -25,13 +25,13 @@ export const NavigationMenu = ({ isOpen, onClose, user, isAdmin, currentPath }) 
       description: 'Encuentra tu equipo perfecto',
       color: '#0fc064'
     },
-    //{
-    //  path: '/voting',
-    //  icon: Vote,
-    //  title: 'Votación de Temas',
-    //  description: 'Vota por el tema de la jam',
-    // color: '#8B5CF6'
-    //}
+    {
+      path: '/voting',
+      icon: Vote,
+      title: 'Votación de Temas',
+      description: 'Vota por el tema de la jam',
+     color: '#8B5CF6'
+    }
   ]
 
   if (isAdmin) {
