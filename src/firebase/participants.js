@@ -8,6 +8,7 @@ import {
     getDoc,
     query, 
     where,
+    orderBy,
     serverTimestamp,
     updateDoc
   } from 'firebase/firestore';
@@ -102,13 +103,14 @@ import {
   };
   
   // Obtener todos los participantes de una jam
-  export const getJamParticipants = async (jamId) => {
-    try {
-      const q = query(
-        collection(db, PARTICIPANTS_COLLECTION),
-        where('jamId', '==', jamId),
-        where('isActive', '==', true)
-      );
+export const getJamParticipants = async (jamId) => {
+  try {
+    const q = query(
+      collection(db, PARTICIPANTS_COLLECTION),
+      where('jamId', '==', jamId),
+      where('isActive', '==', true),
+      orderBy('joinedAt', 'desc')  // ← Agrega esta línea
+    );
       
       const querySnapshot = await getDocs(q);
       const participants = [];

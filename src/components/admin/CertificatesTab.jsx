@@ -1,4 +1,4 @@
-// src/components/admin/CertificatesTab.jsx - Gestión de certificados
+// src/components/admin/CertificatesTab.jsx - Gestión de certificados mejorada
 import React, { useState, useEffect } from 'react';
 import { 
   Award, 
@@ -12,7 +12,9 @@ import {
   CheckCircle,
   BarChart3,
   Gift,
-  Zap
+  Zap,
+  Eye,
+  X
 } from 'lucide-react';
 import {
   getJamCertificates,
@@ -21,6 +23,11 @@ import {
   createRecognitionCertificate,
   deleteCertificate
 } from '../../firebase/certificates';
+import { getUserDisplayName, getUserProfile } from '../../firebase/users';
+import { getJamParticipants } from '../../firebase/participants';
+import { generateCertificateWithCustomBackground } from '../../utils/certificateGenerator';
+import { CertificatePreview } from '../certificates/CertificatePreview';
+import { ManualCertificateCreator } from './ManualCertificateCreator';
 
 export const CertificatesTab = ({ currentJam, onRefresh }) => {
   const [certificates, setCertificates] = useState([]);
@@ -28,8 +35,12 @@ export const CertificatesTab = ({ currentJam, onRefresh }) => {
   const [loading, setLoading] = useState(false);
   const [creatingMass, setCreatingMass] = useState(false);
   const [showCreateRecognition, setShowCreateRecognition] = useState(false);
+  const [showAdvancedCreator, setShowAdvancedCreator] = useState(false);
   const [selectedUser, setSelectedUser] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [participants, setParticipants] = useState([]);
+  const [userNames, setUserNames] = useState({}); // Cache de nombres de usuarios
+  const [previewCertificate, setPreviewCertificate] = useState(null);
 
   // Categorías de reconocimiento
   const recognitionCategories = [
@@ -43,8 +54,35 @@ export const CertificatesTab = ({ currentJam, onRefresh }) => {
   useEffect(() => {
     if (currentJam?.id) {
       loadCertificatesData();
+      loadParticipants();
     }
   }, [currentJam?.id]);
+
+  const loadParticipants = async () => {
+    if (!currentJam?.id) return;
+    
+    try {
+      const participantsData = await getJamParticipants(currentJam.id);
+      setParticipants(participantsData);
+      
+      // Cargar nombres de todos los participantes
+      const namesCache = {};
+      await Promise.all(
+        participantsData.map(async (participant) => {
+          try {
+            const name = await getUserDisplayName(participant.userId);
+            namesCache[participant.userId] = name;
+          } catch (error) {
+            console.error(`Error loading name for user ${participant.userId}:`, error);
+            namesCache[participant.userId] = `Usuario ${participant.userId.slice(0, 8)}`;
+          }
+        })
+      );
+      setUserNames(namesCache);
+    } catch (error) {
+      console.error('Error loading participants:', error);
+    }
+  };
 
   const loadCertificatesData = async () => {
     if (!currentJam?.id) return;
@@ -58,11 +96,45 @@ export const CertificatesTab = ({ currentJam, onRefresh }) => {
       
       setCertificates(certificatesData);
       setStats(statsData);
+      
+      // Cargar nombres de usuarios para certificados existentes
+      const userIds = [...new Set(certificatesData.map(cert => cert.userId))];
+      const namesCache = { ...userNames };
+      
+      await Promise.all(
+        userIds.map(async (userId) => {
+          if (!namesCache[userId]) {
+            try {
+              const name = await getUserDisplayName(userId);
+              namesCache[userId] = name;
+            } catch (error) {
+              console.error(`Error loading name for user ${userId}:`, error);
+              namesCache[userId] = `Usuario ${userId.slice(0, 8)}`;
+            }
+          }
+        })
+      );
+      
+      setUserNames(namesCache);
     } catch (error) {
       console.error('Error loading certificates data:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const getUserName = (userId) => {
+    return userNames[userId] || `Usuario ${userId.slice(0, 8)}`;
+  };
+
+  const getCategoryName = (category) => {
+    const categoryMap = recognitionCategories.find(cat => cat.id === category);
+    return categoryMap ? categoryMap.name : category;
+  };
+
+  const getCategoryIcon = (category) => {
+    const categoryMap = recognitionCategories.find(cat => cat.id === category);
+    return categoryMap ? categoryMap.icon : '🏆';
   };
 
   const handleCreateMassCertificates = async () => {
@@ -126,126 +198,121 @@ export const CertificatesTab = ({ currentJam, onRefresh }) => {
     }
   };
 
-  const getCategoryIcon = (category) => {
-    const cat = recognitionCategories.find(c => c.id === category);
-    return cat?.icon || '🏆';
+  const handlePreviewCertificate = (certificate) => {
+    setPreviewCertificate(certificate);
   };
 
-  const getCategoryName = (category) => {
-    if (category === 'participation') return 'Participación';
-    const cat = recognitionCategories.find(c => c.id === category);
-    return cat?.name || category;
-  };
+  const handleDownloadCertificate = async (certificate) => {
+    try {
+      // Obtener información completa del usuario
+      const userProfile = await getUserProfile(certificate.userId);
+      
+      if (!userProfile || !userProfile.fullName) {
+        alert('El usuario debe completar su perfil para generar certificados válidos');
+        return;
+      }
 
-  if (!currentJam) {
-    return (
-      <div className="text-center text-gray-500 py-12">
-        <Award className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-        <h3 className="text-lg font-semibold mb-2">No hay jam activa</h3>
-        <p>Selecciona una jam activa para gestionar certificados</p>
-      </div>
-    );
-  }
+      const certificateData = {
+        userName: userProfile.fullName,
+        jamName: certificate.jamName,
+        category: getCategoryName(certificate.category),
+        isWinner: certificate.isWinner,
+        date: certificate.awardedDate,
+        certificateId: certificate.id,
+        gameName: certificate.gameName || null,
+        // Campos personalizados
+        customTitle: certificate.customTitle || null,
+        customSubtitle: certificate.customSubtitle || null,
+        customMainText: certificate.customMainText || null,
+        customSignature: certificate.customSignature || null
+      };
+
+      await generateCertificateWithCustomBackground(certificateData);
+    } catch (error) {
+      console.error('Error generating certificate:', error);
+      alert('Error al generar el certificado. Intenta de nuevo.');
+    }
+  };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-        <div>
-          <h3 className="text-xl font-bold text-white">Gestión de Certificados - {currentJam.name}</h3>
-          <div className="flex items-center gap-4 mt-1 text-gray-400">
-            <span className="flex items-center gap-1">
-              <Award className="w-4 h-4" />
-              {stats.totalCertificates || 0} certificados emitidos
-            </span>
-            <span className="flex items-center gap-1">
-              <Users className="w-4 h-4" />
-              {stats.participationCertificates || 0} participación
-            </span>
-            <span className="flex items-center gap-1">
-              <Star className="w-4 h-4" />
-              {stats.recognitionCertificates || 0} reconocimientos
-            </span>
+      {/* Header y estadísticas principales */}
+      <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-yellow-500 flex items-center justify-center">
+              <Award className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-white">Gestión de Certificados</h3>
+              <p className="text-gray-400 text-sm">
+                {currentJam ? `Game Jam: ${currentJam.name}` : 'Selecciona una Game Jam'}
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex gap-3">
+            <button
+              onClick={handleCreateMassCertificates}
+              disabled={creatingMass || !currentJam}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {creatingMass ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Users className="w-4 h-4" />
+              )}
+              {creatingMass ? 'Creando...' : 'Crear Certificados Masivos'}
+            </button>
+            
+            <button
+              onClick={() => setShowAdvancedCreator(true)}
+              disabled={!currentJam}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Plus className="w-4 h-4" />
+              Crear Certificado Personalizado
+            </button>
           </div>
         </div>
 
-        <div className="flex gap-3">
-          <button
-            onClick={handleCreateMassCertificates}
-            disabled={creatingMass}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 transition-colors font-semibold disabled:opacity-50"
-          >
-            <FileText className="w-4 h-4" />
-            {creatingMass ? 'Creando...' : 'Crear Certificados Masivos'}
-          </button>
-
-          <button
-            onClick={() => setShowCreateRecognition(true)}
-            className="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 flex items-center gap-2 transition-colors font-semibold"
-          >
-            <Star className="w-4 h-4" />
-            Crear Reconocimiento
-          </button>
-        </div>
-      </div>
-
-      {/* Estadísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-400">Total Certificados</p>
-              <p className="text-2xl font-bold text-white">
-                {stats.totalCertificates || 0}
-              </p>
+        {/* Estadísticas rápidas */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-gray-700 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-300">Total Certificados</p>
+                <p className="text-2xl font-bold text-white">{stats.totalCertificates || 0}</p>
+              </div>
+              <FileText className="w-8 h-8 text-blue-400" />
             </div>
-            <Award className="w-8 h-8 text-blue-400" />
           </div>
-        </div>
-
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-400">Participación</p>
-              <p className="text-2xl font-bold text-green-400">
-                {stats.participationCertificates || 0}
-              </p>
+          
+          <div className="bg-gray-700 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-300">Participación</p>
+                <p className="text-2xl font-bold text-white">{stats.participationCertificates || 0}</p>
+              </div>
+              <Award className="w-8 h-8 text-green-400" />
             </div>
-            <Users className="w-8 h-8 text-green-400" />
           </div>
-        </div>
-
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-400">Reconocimientos</p>
-              <p className="text-2xl font-bold text-yellow-400">
-                {stats.recognitionCertificates || 0}
-              </p>
+          
+          <div className="bg-gray-700 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-300">Reconocimientos</p>
+                <p className="text-2xl font-bold text-white">{stats.recognitionCertificates || 0}</p>
+              </div>
+              <Star className="w-8 h-8 text-yellow-400" />
             </div>
-            <Star className="w-8 h-8 text-yellow-400" />
-          </div>
-        </div>
-
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-400">Categorías Premiadas</p>
-              <p className="text-2xl font-bold text-purple-400">
-                {Object.keys(stats.categoriesStats || {}).length}
-              </p>
-            </div>
-            <BarChart3 className="w-8 h-8 text-purple-400" />
           </div>
         </div>
       </div>
 
       {/* Información sobre certificados */}
       <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
-        <h4 className="font-semibold text-white mb-4 flex items-center gap-2">
-          <Gift className="w-5 h-5 text-green-400" />
-          Información sobre Certificados
-        </h4>
+        <h4 className="font-semibold text-white mb-4">Tipos de Certificados</h4>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
@@ -324,21 +391,35 @@ export const CertificatesTab = ({ currentJam, onRefresh }) => {
                       )}
                     </div>
                     
-                    <div>
+                    <div className="flex-1">
                       <h5 className="font-medium text-white">
                         {cert.isWinner ? 'Reconocimiento' : 'Participación'} - {getCategoryName(cert.category)}
                       </h5>
                       <p className="text-sm text-gray-300">
-                        Usuario ID: {cert.userId}
+                        Participante: {getUserName(cert.userId)}
                       </p>
+                      {cert.gameName && (
+                        <p className="text-sm text-blue-300">
+                          Juego: {cert.gameName}
+                        </p>
+                      )}
                       <p className="text-xs text-gray-400">
-                        Emitido: {cert.awardedDate.toLocaleDateString()}
+                        Emitido: {cert.awardedDate.toLocaleDateString('es-ES')}
                       </p>
                     </div>
                   </div>
                   
                   <div className="flex items-center gap-2">
                     <span className="text-2xl">{getCategoryIcon(cert.category)}</span>
+                    
+                    {/* Botón de vista previa */}
+                    <button
+                      onClick={() => handlePreviewCertificate(cert)}
+                      className="p-2 text-blue-400 hover:bg-blue-900 hover:bg-opacity-20 rounded-lg transition-colors"
+                      title="Vista previa del certificado"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
                     
                     <button
                       onClick={() => handleDeleteCertificate(cert.id)}
@@ -355,39 +436,60 @@ export const CertificatesTab = ({ currentJam, onRefresh }) => {
         )}
       </div>
 
-      {/* Modal para crear reconocimiento */}
+      {/* Creador manual de certificados */}
+      {showAdvancedCreator && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-4xl">
+            <ManualCertificateCreator
+              currentJam={currentJam}
+              onSuccess={() => {
+                setShowAdvancedCreator(false);
+                loadCertificatesData();
+              }}
+              onCancel={() => setShowAdvancedCreator(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Modal para crear reconocimiento (método anterior - mantener como backup) */}
       {showCreateRecognition && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-bold text-white mb-4">Crear Certificado de Reconocimiento</h3>
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-4">Crear Certificado de Reconocimiento</h3>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-white mb-2">
-                  ID del Usuario
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Participante
                 </label>
-                <input
-                  type="text"
+                <select
                   value={selectedUser}
                   onChange={(e) => setSelectedUser(e.target.value)}
-                  className="w-full p-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-gray-500 focus:outline-none"
-                  placeholder="ID del usuario a reconocer"
-                />
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Seleccionar participante...</option>
+                  {participants.map((participant) => (
+                    <option key={participant.userId} value={participant.userId}>
+                      {getUserName(participant.userId)}
+                    </option>
+                  ))}
+                </select>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-white mb-2">
-                  Categoría de Reconocimiento
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Categoría
                 </label>
                 <select
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="w-full p-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-gray-500 focus:outline-none"
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="">Selecciona una categoría</option>
-                  {recognitionCategories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.icon} {cat.name}
+                  <option value="">Seleccionar categoría...</option>
+                  {recognitionCategories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.icon} {category.name}
                     </option>
                   ))}
                 </select>
@@ -397,10 +499,9 @@ export const CertificatesTab = ({ currentJam, onRefresh }) => {
             <div className="flex gap-3 mt-6">
               <button
                 onClick={handleCreateRecognition}
-                disabled={!selectedUser || !selectedCategory}
-                className="flex-1 bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
               >
-                Crear Reconocimiento
+                Crear Certificado
               </button>
               <button
                 onClick={() => {
@@ -408,13 +509,23 @@ export const CertificatesTab = ({ currentJam, onRefresh }) => {
                   setSelectedUser('');
                   setSelectedCategory('');
                 }}
-                className="flex-1 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
+                className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
               >
                 Cancelar
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de vista previa */}
+      {previewCertificate && (
+        <CertificatePreview
+          certificate={previewCertificate}
+          userName={getUserName(previewCertificate.userId)}
+          onClose={() => setPreviewCertificate(null)}
+          onDownload={handleDownloadCertificate}
+        />
       )}
     </div>
   );

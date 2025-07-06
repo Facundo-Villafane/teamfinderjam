@@ -96,7 +96,7 @@ export const generateCertificatePDF = async ({
     
     // Nombre del usuario
     pdf.setTextColor(26, 26, 46);
-    pdf.setFontSize(28);
+    pdf.setFontSize(45);
     pdf.setFont('helvetica', 'bold');
     pdf.text(userName, pageWidth / 2, 120, { align: 'center' });
     
