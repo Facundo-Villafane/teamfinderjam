@@ -1,4 +1,4 @@
-// src/hooks/useThemeActions.js - Hook actualizado para múltiples votos
+// src/hooks/useThemeActions.js - Hook corregido
 import { useState, useEffect } from 'react';
 import {
   createTheme,
@@ -97,52 +97,74 @@ export const useThemeActions = (user) => {
     setEditingTheme(null);
   };
 
-  // Alternar estado de votación
-  const handleToggleVoting = async (jamId) => {
+  // ✅ ARREGLADO: Alternar estado de votación
+  const handleToggleVoting = async (jam) => {
     try {
+      // ✅ Extraer el ID del objeto jam si es necesario
+      const jamId = typeof jam === 'string' ? jam : jam?.id;
+      
+      if (!jamId) {
+        console.error('jamId is required for toggleVoting');
+        alert('Error: ID de jam no válido');
+        return;
+      }
+
+      console.log('Toggling voting for jamId:', jamId);
       const newStatus = await toggleVotingStatus(jamId);
       const statusText = newStatus ? 'cerrada' : 'abierta';
+      
       alert(`Votación ${statusText} exitosamente!`);
       
-      // Recargar datos para reflejar cambios
-      await loadThemeData(jamId);
+      // Recargar datos si es necesario
+      if (currentJamId === jamId) {
+        await loadThemeData(jamId);
+      }
     } catch (error) {
       console.error('Error toggling voting status:', error);
-      alert('Error al cambiar el estado de la votación.');
+      alert('Error al cambiar el estado de votación. Intenta de nuevo.');
     }
   };
 
-  // Seleccionar tema ganador
+  // ✅ ARREGLADO: Seleccionar ganador
   const handleSelectWinner = async (theme) => {
-    const voteCount = votingResults[theme.id] || 0;
-    
-    if (window.confirm(
-      `¿Confirmar "${theme.title}" como tema ganador?\n\n` +
-      `Este tema tiene ${voteCount} votos.\n` +
-      `Esto revelará los resultados a todos los usuarios y cerrará la votación automáticamente.`
-    )) {
-      try {
+    try {
+      if (!currentJamId) {
+        alert('Error: No hay jam activa');
+        return;
+      }
+
+      if (!theme || !theme.id) {
+        alert('Error: Tema no válido');
+        return;
+      }
+
+      if (window.confirm(`¿Seleccionar "${theme.title}" como tema ganador? Esto cerrará la votación y hará públicos los resultados.`)) {
         await selectWinnerTheme(currentJamId, theme);
         await loadThemeData(currentJamId);
-        alert('Tema ganador seleccionado exitosamente! Los resultados ahora son visibles para todos.');
-      } catch (error) {
-        console.error('Error selecting winner:', error);
-        alert('Error al seleccionar el tema ganador.');
+        alert('¡Tema ganador seleccionado exitosamente!');
       }
+    } catch (error) {
+      console.error('Error selecting winner:', error);
+      alert('Error al seleccionar ganador. Intenta de nuevo.');
     }
   };
 
   return {
+    // Estado
     themes,
     votingResults,
     editingTheme,
     loading,
+    
+    // Funciones de gestión
     loadThemeData,
     handleCreateTheme,
     handleEditTheme,
     handleSaveTheme,
     handleDeleteTheme,
     handleCancelThemeEdit,
+    
+    // Funciones de votación
     handleToggleVoting,
     handleSelectWinner
   };

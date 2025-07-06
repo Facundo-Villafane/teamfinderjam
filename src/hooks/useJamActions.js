@@ -1,93 +1,188 @@
-// src/hooks/useJamActions.js
-import { useState } from 'react';
+// src/hooks/useThemeActions.js - Hook corregido con recarga de jam
+import { useState, useEffect } from 'react';
 import {
-  createJam,
-  updateJam,
-  deleteJam,
-  setActiveJam,
-  logAdminAction
-} from '../firebase/admin';
+  createTheme,
+  updateTheme,
+  deleteTheme,
+  getThemesByJam,
+  getAdminVotingResults,
+  toggleVotingStatus,
+  selectWinnerTheme
+} from '../firebase/themes';
 
-export const useJamActions = (user, loadAllData) => {
-  const [editingJam, setEditingJam] = useState(null);
+export const useThemeActions = (user) => {
+  const [themes, setThemes] = useState([]);
+  const [votingResults, setVotingResults] = useState({});
+  const [editingTheme, setEditingTheme] = useState(null);
+  const [currentJamId, setCurrentJamId] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleSaveJam = async (jamData) => {
+  // Cargar temas cuando cambia la jam activa
+  const loadThemeData = async (jamId) => {
+    if (!jamId) {
+      setThemes([]);
+      setVotingResults({});
+      return;
+    }
+
     try {
-      if (editingJam && editingJam.id) {
-        await updateJam(editingJam.id, jamData);
-        await logAdminAction(user.uid, 'update_jam', { jamId: editingJam.id, jamName: jamData.name });
-      } else {
-        const newJamId = await createJam(jamData);
-        await logAdminAction(user.uid, 'create_jam', { jamId: newJamId, jamName: jamData.name });
-      }
+      setLoading(true);
+      setCurrentJamId(jamId);
       
-      await loadAllData();
-      setEditingJam(null);
-      alert('Jam saved successfully!');
+      const [themesData, adminResults] = await Promise.all([
+        getThemesByJam(jamId),
+        getAdminVotingResults(jamId)
+      ]);
+      
+      setThemes(themesData);
+      // Para admins, siempre mostrar resultados completos
+      setVotingResults(adminResults.results || {});
     } catch (error) {
-      console.error('Error saving jam:', error);
-      alert('Error saving jam');
+      console.error('Error loading theme data:', error);
+      setThemes([]);
+      setVotingResults({});
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDeleteJam = async (jamId, jams) => {
-    if (window.confirm('¿Estás seguro de eliminar esta jam? Esto también eliminará todos los posts asociados.')) {
+  // Crear nuevo tema
+  const handleCreateTheme = () => {
+    setEditingTheme({});
+  };
+
+  // Editar tema existente
+  const handleEditTheme = (theme) => {
+    setEditingTheme(theme);
+  };
+
+  // Guardar tema (crear o actualizar)
+  const handleSaveTheme = async (themeData) => {
+    try {
+      if (editingTheme && editingTheme.id) {
+        // Actualizar tema existente
+        await updateTheme(editingTheme.id, themeData);
+      } else {
+        // Crear nuevo tema
+        await createTheme(themeData);
+      }
+      
+      // Recargar datos
+      await loadThemeData(currentJamId);
+      setEditingTheme(null);
+      
+      alert('Tema guardado exitosamente!');
+    } catch (error) {
+      console.error('Error saving theme:', error);
+      alert('Error al guardar el tema. Intenta de nuevo.');
+    }
+  };
+
+  // Eliminar tema
+  const handleDeleteTheme = async (themeId) => {
+    if (window.confirm('¿Estás seguro de eliminar este tema? También se eliminarán todos los votos asociados.')) {
       try {
-        const jam = jams.find(j => j.id === jamId);
-        await deleteJam(jamId);
-        await logAdminAction(user.uid, 'delete_jam', { jamId, jamName: jam?.name });
-        await loadAllData();
-        alert('Jam deleted successfully!');
+        await deleteTheme(themeId);
+        await loadThemeData(currentJamId);
+        alert('Tema eliminado exitosamente!');
       } catch (error) {
-        console.error('Error deleting jam:', error);
-        alert('Error deleting jam');
+        console.error('Error deleting theme:', error);
+        alert('Error al eliminar el tema. Intenta de nuevo.');
       }
     }
   };
 
-  const handleToggleActive = async (jamId, jams) => {
+  // Cancelar edición
+  const handleCancelThemeEdit = () => {
+    setEditingTheme(null);
+  };
+
+  // ✅ ARREGLADO: Alternar estado de votación con callback para recargar jam
+  const handleToggleVoting = async (jam, onJamUpdate = null) => {
     try {
-      const jam = jams.find(j => j.id === jamId);
-      const newActiveState = !jam.active;
+      // Extraer el ID del objeto jam si es necesario
+      const jamId = typeof jam === 'string' ? jam : jam?.id;
       
-      if (newActiveState) {
-        await setActiveJam(jamId);
-      } else {
-        await setActiveJam(null);
+      if (!jamId) {
+        console.error('jamId is required for toggleVoting');
+        alert('Error: ID de jam no válido');
+        return;
+      }
+
+      console.log('Toggling voting for jamId:', jamId);
+      const newIsClosed = await toggleVotingStatus(jamId);
+      const statusText = newIsClosed ? 'cerrada' : 'abierta';
+      
+      alert(`Votación ${statusText} exitosamente!`);
+      
+      // ✅ Llamar callback para recargar la jam en el componente padre
+      if (onJamUpdate && typeof onJamUpdate === 'function') {
+        await onJamUpdate();
       }
       
-      await logAdminAction(user.uid, 'toggle_jam_active', { 
-        jamId, 
-        jamName: jam?.name, 
-        newState: newActiveState 
-      });
-      
-      await loadAllData();
+      // Recargar datos de temas si es necesario
+      if (currentJamId === jamId) {
+        await loadThemeData(jamId);
+      }
     } catch (error) {
-      console.error('Error toggling jam active:', error);
-      alert('Error updating jam status');
+      console.error('Error toggling voting status:', error);
+      alert('Error al cambiar el estado de votación. Intenta de nuevo.');
     }
   };
 
-  const handleCreateJam = () => {
-    setEditingJam({});
-  };
+  // ✅ ARREGLADO: Seleccionar ganador con callback para recargar jam
+  const handleSelectWinner = async (theme, onJamUpdate = null) => {
+    try {
+      if (!currentJamId) {
+        alert('Error: No hay jam activa');
+        return;
+      }
 
-  const handleEditJam = (jam) => {
-    setEditingJam(jam);
-  };
+      if (!theme || !theme.id) {
+        alert('Error: Tema no válido');
+        return;
+      }
 
-  const handleCancelEdit = () => {
-    setEditingJam(null);
+      const voteCount = votingResults[theme.id] || 0;
+      
+      if (window.confirm(
+        `¿Seleccionar "${theme.title}" como tema ganador?\n\n` +
+        `Este tema tiene ${voteCount} votos.\n` +
+        `Esto revelará los resultados a todos los usuarios y cerrará la votación automáticamente.`
+      )) {
+        await selectWinnerTheme(currentJamId, theme);
+        
+        // ✅ Llamar callback para recargar la jam en el componente padre
+        if (onJamUpdate && typeof onJamUpdate === 'function') {
+          await onJamUpdate();
+        }
+        
+        await loadThemeData(currentJamId);
+        alert('¡Tema ganador seleccionado exitosamente! Los resultados ahora son visibles para todos.');
+      }
+    } catch (error) {
+      console.error('Error selecting winner:', error);
+      alert('Error al seleccionar ganador. Intenta de nuevo.');
+    }
   };
 
   return {
-    editingJam,
-    handleSaveJam,
-    handleDeleteJam,
-    handleToggleActive,
-    handleCreateJam,
-    handleEditJam,
-    handleCancelEdit
+    // Estado
+    themes,
+    votingResults,
+    editingTheme,
+    loading,
+    
+    // Funciones de gestión
+    loadThemeData,
+    handleCreateTheme,
+    handleEditTheme,
+    handleSaveTheme,
+    handleDeleteTheme,
+    handleCancelThemeEdit,
+    
+    // Funciones de votación (con callback para recargar jam)
+    handleToggleVoting,
+    handleSelectWinner
   };
 };

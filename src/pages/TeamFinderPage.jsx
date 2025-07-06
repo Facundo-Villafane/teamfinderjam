@@ -29,10 +29,31 @@ const TeamFinderPage = ({ user }) => {
   ]
 
   const timezoneOptions = [
-    'UTC-12', 'UTC-11', 'UTC-10', 'UTC-9', 'UTC-8', 'UTC-7', 'UTC-6',
-    'UTC-5', 'UTC-4', 'UTC-3: Halifax, São Paulo, Buenos Aires', 'UTC-2',
-    'UTC-1', 'UTC+0', 'UTC+1', 'UTC+2', 'UTC+3', 'UTC+4', 'UTC+5',
-    'UTC+6', 'UTC+7', 'UTC+8', 'UTC+9', 'UTC+10', 'UTC+11', 'UTC+12'
+    'UTC-12: Baker Island, Howland Island',
+    'UTC-11: Samoa, Niue, Midway Island',
+    'UTC-10: Honolulu, Anchorage, Tahiti',
+    'UTC-9: Anchorage, Juneau, Fairbanks',
+    'UTC-8: Los Angeles, San Francisco, Vancouver, Seattle',
+    'UTC-7: Denver, Phoenix, Calgary, Las Vegas',
+    'UTC-6: Chicago, México DF, Guatemala, Winnipeg',
+    'UTC-5: Nueva York, Toronto, Miami, Bogotá, Lima',
+    'UTC-4: Caracas, La Paz, Santo Domingo, Halifax',
+    'UTC-3: Buenos Aires, São Paulo, Montevideo, Santiago',
+    'UTC-2: Fernando de Noronha, South Georgia',
+    'UTC-1: Azores, Cabo Verde',
+    'UTC+0: Londres, Lisboa, Dublin, Casablanca',
+    'UTC+1: Madrid, París, Roma, Berlín, Lagos',
+    'UTC+2: El Cairo, Atenas, Helsinki, Johannesburgo',
+    'UTC+3: Moscú, Estambul, Nairobi, Riyadh',
+    'UTC+4: Dubai, Baku, Tbilisi, Mauricio',
+    'UTC+5: Karachi, Tashkent, Yekaterinburg',
+    'UTC+6: Almaty, Dhaka, Omsk, Bishkek',
+    'UTC+7: Bangkok, Jakarta, Ho Chi Minh, Krasnoyarsk',
+    'UTC+8: Beijing, Singapur, Manila, Perth, Kuala Lumpur',
+    'UTC+9: Tokio, Seúl, Yakutsk, Pyongyang',
+    'UTC+10: Sydney, Melbourne, Vladivostok, Port Moresby',
+    'UTC+11: Magadan, Norfolk Island, Nueva Caledonia',
+    'UTC+12: Auckland, Fiji, Kamchatka, Marshall Islands'
   ]
 
   // Hooks
@@ -71,7 +92,7 @@ const TeamFinderPage = ({ user }) => {
 
   const handleSubmit = async () => {
     setSubmitting(true)
-    const success = await handleSavePost(editingPost || newPost, !!editingPost, editingPost)
+    const success = await handleSavePost(editingPost || newPost, !editingPost, editingPost)
     
     if (success) {
       resetForm()
@@ -208,7 +229,11 @@ const TeamFinderPage = ({ user }) => {
             onDeletePost={handleDeletePost}
           />
         ) : (
-          <CreatePostForm
+          // ✅ CORREGIDO: Usar CreatePostFormWrapper en lugar de CreatePostForm
+          <CreatePostFormWrapper
+            user={user}
+            currentJam={currentJam}
+            onSignIn={handleSignIn}
             currentPost={editingPost || newPost}
             isEditing={!!editingPost}
             onFieldChange={handleFieldChange}

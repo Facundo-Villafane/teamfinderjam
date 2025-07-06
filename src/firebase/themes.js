@@ -231,7 +231,7 @@ import {
     }
   };
   
-  // ===== RESULTADOS DE VOTACIÓN (SOLO PARA ADMINS) =====
+  // ===== RESULTADOS DE VOTACIÓN =====
   
   // Obtener resultados de votación (solo visible cuando se selecciona ganador)
   export const getVotingResults = async (jamId) => {
@@ -324,6 +324,14 @@ import {
   // Alternar estado de votación (abrir/cerrar)
   export const toggleVotingStatus = async (jamId) => {
     try {
+      // ✅ Validación defensiva para asegurar que jamId es un string
+      if (!jamId || typeof jamId !== 'string') {
+        console.error('toggleVotingStatus: jamId must be a valid string, received:', typeof jamId, jamId);
+        throw new Error('jamId debe ser un string válido');
+      }
+
+      console.log('toggleVotingStatus: Processing jamId:', jamId);
+      
       const jamRef = doc(db, JAMS_COLLECTION, jamId);
       const jamSnapshot = await getDoc(jamRef);
       
@@ -332,13 +340,20 @@ import {
       }
       
       const jamData = jamSnapshot.data();
-      const newStatus = !jamData.themeVotingClosed;
+      
+      // ✅ CORREGIDO: Usar themeVotingClosed consistentemente
+      // true = cerrada, false = abierta
+      const currentlyClosed = jamData.themeVotingClosed || false;
+      const newStatus = !currentlyClosed; // Alternar el estado
+      
+      console.log('toggleVotingStatus: Currently closed:', currentlyClosed, '-> New status (closed):', newStatus);
       
       await updateDoc(jamRef, {
         themeVotingClosed: newStatus,
         updatedAt: serverTimestamp()
       });
       
+      // Retornar el nuevo estado (si está cerrada)
       return newStatus;
     } catch (error) {
       console.error('Error toggling voting status:', error);
@@ -353,7 +368,7 @@ import {
       
       await updateDoc(jamRef, {
         selectedTheme: themeData,
-        themeVotingClosed: true, // Cerrar votación automáticamente
+        themeVotingClosed: true, // ✅ Cerrar votación automáticamente
         updatedAt: serverTimestamp()
       });
     } catch (error) {

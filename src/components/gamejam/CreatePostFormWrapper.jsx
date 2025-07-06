@@ -1,9 +1,247 @@
-// src/components/gamejam/CreatePostFormWrapper.jsx - Wrapper con participación
+// src/components/gamejam/CreatePostFormWrapper.jsx - Versión combinada sin dependencias problemáticas
 import React from 'react';
 import { UserPlus, AlertCircle, LogIn } from 'lucide-react';
-import { CreatePostForm } from './CreatePostForm';
 import { useJamParticipation } from '../../hooks/useJamParticipation';
 
+// ===== COMPONENTE CREATEPOSTFORM INTEGRADO =====
+const CreatePostForm = ({
+  currentPost,
+  isEditing,
+  onFieldChange,
+  onSkillToggle,
+  onToolToggle,
+  onSubmit,
+  onCancel,
+  submitting,
+  skillOptions,
+  toolOptions,
+  timezoneOptions
+}) => {
+  return (
+    <div className="max-w-4xl mx-auto bg-gray-800 border border-gray-700 rounded-lg p-8 text-white">
+      <h2 className="text-2xl font-bold mb-6 text-center">
+        {isEditing ? 'Editar Publicación' : 'Crear Nueva Publicación'}
+      </h2>
+      
+      <div className="space-y-6">
+        <div>
+          <label className="block mb-2 font-semibold">
+            Escribe un resumen breve de lo que estás buscando:
+          </label>
+          <textarea
+            value={currentPost.description}
+            onChange={(e) => onFieldChange('description', e.target.value)}
+            className="w-full h-32 p-3 bg-gray-700 text-white rounded-lg resize-none border border-gray-600 focus:border-gray-500 focus:outline-none"
+            placeholder="Describe tu proyecto y qué tipo de miembros de equipo estás buscando..."
+            maxLength={2000}
+            required
+          />
+          <p className="text-gray-400 text-sm mt-1">
+            {2000 - currentPost.description.length} caracteres restantes
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block mb-2 font-semibold">
+              Usuario principal de itch.io:
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={currentPost.username}
+                onChange={(e) => onFieldChange('username', e.target.value)}
+                className="w-full p-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-gray-500 focus:outline-none pr-20"
+                placeholder="tunombre"
+                required
+              />
+              <span className="absolute right-3 top-3 text-gray-400 text-sm">.itch.io</span>
+            </div>
+            <p className="text-gray-400 text-sm mt-1">
+              Solo el nombre de usuario, automáticamente se enlazará a tu perfil
+            </p>
+          </div>
+
+          <div>
+            <label className="block mb-2 font-semibold">
+              Miembros actuales del equipo (opcional):
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={currentPost.teamMembers}
+                onChange={(e) => onFieldChange('teamMembers', e.target.value)}
+                className="w-full p-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-gray-500 focus:outline-none pr-20"
+                placeholder="usuario1, usuario2"
+              />
+              <span className="absolute right-3 top-3 text-gray-400 text-sm">.itch.io</span>
+            </div>
+            <p className="text-gray-400 text-sm mt-1">
+              Separa múltiples usuarios con comas, cada uno será enlazado automáticamente
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <label className="block mb-2 font-semibold">
+            Información de Contacto:
+          </label>
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <select
+                value={currentPost.contactType}
+                onChange={(e) => onFieldChange('contactType', e.target.value)}
+                className="bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-gray-500 focus:outline-none px-3 py-2"
+              >
+                <option value="discord">Discord</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="telegram">Telegram</option>
+                <option value="email">Email</option>
+                <option value="other">Otro</option>
+              </select>
+              <input
+                type="text"
+                value={currentPost.contactInfo}
+                onChange={(e) => onFieldChange('contactInfo', e.target.value)}
+                className="flex-1 p-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-gray-500 focus:outline-none"
+                placeholder={
+                  currentPost.contactType === 'discord' ? 'usuario#1234 o enlace de servidor' :
+                  currentPost.contactType === 'whatsapp' ? '+54911234567 o enlace' :
+                  currentPost.contactType === 'telegram' ? '@usuario' :
+                  currentPost.contactType === 'email' ? 'tu@email.com' :
+                  'Tu información de contacto'
+                }
+                required
+              />
+            </div>
+            <p className="text-gray-400 text-sm">
+              Cómo pueden contactarte los interesados en unirse a tu equipo
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block mb-2 font-semibold">
+              Zona horaria preferida:
+            </label>
+            <select
+              value={currentPost.timezone}
+              onChange={(e) => onFieldChange('timezone', e.target.value)}
+              className="w-full p-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-gray-500 focus:outline-none"
+            >
+              {timezoneOptions.map(tz => (
+                <option key={tz} value={tz}>{tz}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block mb-2 font-semibold">
+              Tamaño del equipo actual:
+            </label>
+            <select
+              value={currentPost.memberCount || 1}
+              onChange={(e) => onFieldChange('memberCount', parseInt(e.target.value))}
+              className="w-full p-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-gray-500 focus:outline-none"
+            >
+              <option value={1}>1 persona (solo yo)</option>
+              <option value={2}>2 personas</option>
+              <option value={3}>3 personas</option>
+              <option value={4}>4 personas</option>
+              <option value={5}>5+ personas</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="block mb-2 font-semibold">
+            ¿Qué roles estás buscando en tu equipo?
+          </label>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {skillOptions.map(skill => (
+              <button
+                key={skill}
+                type="button"
+                onClick={() => onSkillToggle(skill, 'lookingFor')}
+                className={`p-2 rounded-lg text-sm transition-colors ${
+                  currentPost.lookingFor.includes(skill)
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                {skill}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="block mb-2 font-semibold">
+            ¿Qué puedes aportar tú al equipo?
+          </label>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {skillOptions.map(skill => (
+              <button
+                key={skill}
+                type="button"
+                onClick={() => onSkillToggle(skill, 'canDo')}
+                className={`p-2 rounded-lg text-sm transition-colors ${
+                  currentPost.canDo.includes(skill)
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                {skill}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="block mb-2 font-semibold">
+            Herramientas que usas (opcional):
+          </label>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {toolOptions.map(tool => (
+              <button
+                key={tool}
+                type="button"
+                onClick={() => onToolToggle(tool)}
+                className={`p-2 rounded-lg text-sm transition-colors ${
+                  currentPost.tools.includes(tool)
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                {tool}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex gap-4 pt-4">
+          <button
+            onClick={onSubmit}
+            disabled={submitting || !currentPost.username || !currentPost.description || !currentPost.contactInfo}
+            className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-3 px-6 rounded-lg font-medium transition-colors"
+          >
+            {submitting ? 'Guardando...' : (isEditing ? 'Actualizar' : 'Crear Post')}
+          </button>
+          <button
+            onClick={onCancel}
+            disabled={submitting}
+            className="bg-gray-600 hover:bg-gray-700 disabled:bg-gray-700 text-white py-3 px-6 rounded-lg font-medium transition-colors"
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ===== COMPONENTE WRAPPER PRINCIPAL =====
 export const CreatePostFormWrapper = ({
   user,
   currentJam,
@@ -143,7 +381,7 @@ export const CreatePostFormWrapper = ({
     );
   }
 
-  // Si puede crear posts, mostrar el formulario normal
+  // Si puede crear posts, mostrar el formulario
   if (canCreatePost()) {
     return <CreatePostForm {...createPostProps} />;
   }
