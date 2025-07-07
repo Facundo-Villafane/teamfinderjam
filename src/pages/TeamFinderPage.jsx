@@ -92,7 +92,8 @@ const TeamFinderPage = ({ user }) => {
 
   const handleSubmit = async () => {
     setSubmitting(true)
-    const success = await handleSavePost(editingPost || newPost, !editingPost, editingPost)
+    // ✅ CORRECTO: !!editingPost devuelve true solo si editingPost existe
+    const success = await handleSavePost(editingPost || newPost, !!editingPost, editingPost)
     
     if (success) {
       resetForm()

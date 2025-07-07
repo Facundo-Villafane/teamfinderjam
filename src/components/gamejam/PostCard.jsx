@@ -1,16 +1,16 @@
-// src/components/gamejam/PostCard.jsx - Con contacto e itch.io
+// src/components/gamejam/PostCard.jsx - Versión mejorada
 import React from 'react';
-import { User, Calendar, MapPin, Users, MessageCircle, Edit3, Trash2, ExternalLink } from 'lucide-react';
+import { User, Calendar, MapPin, Users, Edit3, Trash2, ExternalLink } from 'lucide-react';
+// ✅ Importar react-icons
+import { FaWhatsapp, FaTelegram, FaDiscord, FaEnvelope, FaPhone } from 'react-icons/fa';
 import { SkillTag } from './SkillTag';
 import { ToolTag } from './ToolTag';
 
 // Función helper para crear enlaces de itch.io
 const createItchLink = (username) => {
   if (!username) return null;
-  // Si ya es un enlace completo, usarlo tal como está
   if (username.includes('http')) return username;
-  // Si no, agregar .itch.io
-  const cleanUsername = username.replace('.itch.io', ''); // Por si acaso ya lo tiene
+  const cleanUsername = username.replace('.itch.io', '');
   return `https://${cleanUsername}.itch.io`;
 };
 
@@ -18,38 +18,40 @@ const createItchLink = (username) => {
 const createContactLink = (type, info) => {
   if (!info) return null;
   
-  // Si ya es un enlace, usarlo tal como está
   if (info.includes('http')) return info;
   
   switch(type) {
     case 'whatsapp':
-      // Si es un número, crear enlace de WhatsApp
-      const phoneNumber = info.replace(/[^\d+]/g, ''); // Solo números y +
+      const phoneNumber = info.replace(/[^\d+]/g, '');
       return `https://wa.me/${phoneNumber}`;
     case 'telegram':
-      // Si empieza con @, crear enlace de Telegram
       if (info.startsWith('@')) {
         return `https://t.me/${info.substring(1)}`;
       }
       return `https://t.me/${info}`;
     case 'discord':
-      // Para Discord solo mostrar el usuario, no hay enlace directo
       return null;
     default:
       return null;
   }
 };
 
-// Componente para mostrar contacto
+// ✅ Componente ContactButton mejorado
 const ContactButton = ({ contactType, contactInfo }) => {
   const link = createContactLink(contactType, contactInfo);
   
   const getContactIcon = () => {
     switch(contactType) {
-      case 'whatsapp': return '📱';
-      case 'telegram': return '✈️';
-      case 'discord': return '💬';
-      default: return '📞';
+      case 'whatsapp': 
+        return <FaWhatsapp className="w-4 h-4" />;
+      case 'telegram': 
+        return <FaTelegram className="w-4 h-4" />;
+      case 'discord': 
+        return <FaDiscord className="w-4 h-4" />;
+      case 'email': 
+        return <FaEnvelope className="w-4 h-4" />;
+      default: 
+        return <FaPhone className="w-4 h-4" />;
     }
   };
 
@@ -58,7 +60,18 @@ const ContactButton = ({ contactType, contactInfo }) => {
       case 'whatsapp': return 'WhatsApp';
       case 'telegram': return 'Telegram';
       case 'discord': return 'Discord';
+      case 'email': return 'Email';
       default: return 'Contactar';
+    }
+  };
+
+  const getButtonColor = () => {
+    switch(contactType) {
+      case 'whatsapp': return '#25D366'; // Verde WhatsApp oficial
+      case 'telegram': return '#0088cc'; // Azul Telegram oficial
+      case 'discord': return '#5865F2'; // Púrpura Discord oficial
+      case 'email': return '#EA4335'; // Rojo Gmail
+      default: return '#0fc064'; // Verde por defecto
     }
   };
 
@@ -68,21 +81,22 @@ const ContactButton = ({ contactType, contactInfo }) => {
         href={link}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors text-white hover:opacity-90"
-        style={{ backgroundColor: '#0fc064' }}
+        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all duration-200 text-white hover:scale-105 hover:shadow-lg"
+        style={{ backgroundColor: getButtonColor() }}
       >
-        <span>{getContactIcon()}</span>
-        {getContactLabel()}
-        <ExternalLink className="w-3 h-3" />
+        {getContactIcon()}
+        <span className="text-sm">{getContactLabel()}</span>
+        <ExternalLink className="w-3 h-3 opacity-70" />
       </a>
     );
   } else {
     return (
-      <div className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-white" style={{ backgroundColor: '#0fc064' }}>
-        <span>{getContactIcon()}</span>
-        <div className="text-center">
-          <div className="text-xs">{getContactLabel()}</div>
-          <div className="text-xs font-mono">{contactInfo}</div>
+      <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-white border border-gray-600" 
+           style={{ backgroundColor: getButtonColor() }}>
+        {getContactIcon()}
+        <div className="text-left">
+          <div className="text-xs font-semibold">{getContactLabel()}</div>
+          <div className="text-xs font-mono opacity-90">{contactInfo}</div>
         </div>
       </div>
     );
@@ -187,14 +201,15 @@ export const PostCard = ({ post, isOwner = false, onEdit, onDelete }) => (
       </div>
     )}
 
-    <div className="mb-4">
+    <div className="mb-6">
       <p className="text-gray-200 leading-relaxed">
         {post.description}
       </p>
     </div>
 
-    <div className="flex justify-between items-center">
-      <div className="flex items-center gap-4 text-gray-400 text-sm">
+    {/* ✅ Mejorado: Mejor layout y spacing para la parte inferior */}
+    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 pt-4 border-t border-gray-700">
+      <div className="flex flex-wrap items-center gap-4 text-gray-400 text-sm">
         <div className="flex items-center gap-1">
           <MapPin className="w-4 h-4" />
           <span>{post.timezone}</span>
@@ -204,11 +219,15 @@ export const PostCard = ({ post, isOwner = false, onEdit, onDelete }) => (
           <span>{post.updatedAt?.toLocaleDateString() || 'Recientemente'}</span>
         </div>
       </div>
+      
+      {/* ✅ Mejorado: Mejor positioning del botón de contacto */}
       {!isOwner && post.contactInfo && (
-        <ContactButton 
-          contactType={post.contactType || 'discord'} 
-          contactInfo={post.contactInfo} 
-        />
+        <div className="flex justify-end">
+          <ContactButton 
+            contactType={post.contactType || 'discord'} 
+            contactInfo={post.contactInfo} 
+          />
+        </div>
       )}
     </div>
   </div>
