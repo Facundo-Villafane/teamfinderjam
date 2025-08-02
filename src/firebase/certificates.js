@@ -383,3 +383,96 @@ export const userHasCertificate = async (userId, jamId, category) => {
     return false;
   }
 };
+
+/**
+ * Función para crear certificados personalizados con campos customizables
+ * @param {string} userId - ID del usuario
+ * @param {string} jamId - ID de la jam
+ * @param {object} certificateData - Datos del certificado personalizado
+ * @returns {Promise<string>} ID del certificado creado
+ */
+export const createCustomCertificate = async (userId, jamId, certificateData) => {
+  try {
+    // Obtener datos de la jam
+    const jamRef = doc(db, 'jams', jamId);
+    const jamDoc = await getDoc(jamRef);
+    
+    if (!jamDoc.exists()) {
+      throw new Error('Jam not found');
+    }
+    
+    const jamData = jamDoc.data();
+
+    // Determinar correctamente si es certificado de reconocimiento
+    const isRecognitionCert = certificateData.isWinner === true || 
+                             certificateData.type === 'recognition' ||
+                             (certificateData.category && 
+                              certificateData.category !== 'participation' && 
+                              certificateData.category !== 'Participación');
+
+    console.log('Creating custom certificate:', {
+      userId,
+      category: certificateData.category,
+      isWinner: isRecognitionCert,
+      type: certificateData.type,
+      gameName: certificateData.gameName,
+      gameLink: certificateData.gameLink
+    });
+
+    // Crear certificado con todos los datos personalizados
+    const certificateWithData = {
+      userId,
+      jamId,
+      jamName: jamData.name,
+      category: certificateData.category || 'participation',
+      isWinner: isRecognitionCert,
+      
+      // Campos personalizados del Manual Certificate Creator
+      customTitle: certificateData.title || null,
+      customSubtitle: certificateData.subtitle || null, 
+      customMainText: certificateData.mainText || null,
+      customSignature: certificateData.signature || null,
+      
+      // Campos para reconocimientos
+      gameName: certificateData.gameName || null,
+      gameLink: certificateData.gameLink || null,
+      gameDescription: certificateData.gameDescription || null,
+      postId: certificateData.postId || null,
+      
+      // Timestamps
+      awardedDate: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const docRef = await addDoc(collection(db, CERTIFICATES_COLLECTION), certificateWithData);
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating custom certificate:', error);
+    throw error;
+  }
+};
+
+/**
+ * Función para crear certificados de reconocimiento específicos
+ * @param {string} userId - ID del usuario
+ * @param {string} jamId - ID de la jam
+ * @param {string} category - Categoría del reconocimiento
+ * @param {object} additionalData - Datos adicionales (gameName, gameLink, etc.)
+ * @returns {Promise<string>} ID del certificado creado
+ */
+export const createRecognitionCertificate = async (userId, jamId, category, additionalData = {}) => {
+  try {
+    const recognitionData = {
+      category,
+      type: 'recognition',
+      isWinner: true,
+      ...additionalData
+    };
+    
+    return await createCustomCertificate(userId, jamId, recognitionData);
+  } catch (error) {
+    console.error('Error creating recognition certificate:', error);
+    throw error;
+  }
+};
