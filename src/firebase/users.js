@@ -1,8 +1,28 @@
-// src/firebase/users.js - Versión mejorada con soporte para cuentas de Google
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+// src/firebase/users.js - Versión limpia sin duplicaciones
+import { doc, getDoc, setDoc, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { db, auth } from './config';
 
 const USERS_COLLECTION = 'users';
+
+/**
+ * Función auxiliar para actualizar información de Google del usuario
+ * @param {string} userId - ID del usuario
+ * @param {object} googleInfo - Información de Google a guardar
+ */
+const updateUserGoogleInfo = async (userId, googleInfo) => {
+  try {
+    const userRef = doc(db, USERS_COLLECTION, userId);
+    const updateData = {
+      ...googleInfo,
+      lastGoogleUpdate: new Date()
+    };
+    
+    await setDoc(userRef, updateData, { merge: true });
+  } catch (error) {
+    console.error('Error updating Google info:', error);
+    // No lanzar error para no interrumpir el flujo principal
+  }
+};
 
 /**
  * Obtiene el nombre para mostrar de un usuario con soporte mejorado para Google
@@ -74,26 +94,6 @@ export const getUserDisplayName = async (userId) => {
   } catch (error) {
     console.error('Error getting user display name:', error);
     return `Usuario ${userId.slice(0, 8)}`;
-  }
-};
-
-/**
- * Función auxiliar para actualizar información de Google del usuario
- * @param {string} userId - ID del usuario
- * @param {object} googleInfo - Información de Google a guardar
- */
-const updateUserGoogleInfo = async (userId, googleInfo) => {
-  try {
-    const userRef = doc(db, USERS_COLLECTION, userId);
-    const updateData = {
-      ...googleInfo,
-      lastGoogleUpdate: new Date()
-    };
-    
-    await setDoc(userRef, updateData, { merge: true });
-  } catch (error) {
-    console.error('Error updating Google info:', error);
-    // No lanzar error para no interrumpir el flujo principal
   }
 };
 
@@ -202,6 +202,173 @@ export const getUserProfile = async (userId) => {
   } catch (error) {
     console.error('Error getting user profile:', error);
     return null;
+  }
+};
+
+/**
+ * Obtiene todos los usuarios (función para admin) - Versión robusta
+ * @returns {Promise<Array>} Array con todos los usuarios
+ */
+export const getAllUsers = async () => {
+  try {
+    // Primero intentar con orderBy
+    let usersSnapshot;
+    let users = [];
+    
+    try {
+      const usersQuery = query(
+        collection(db, USERS_COLLECTION),
+        orderBy('createdAt', 'desc')
+      );
+      usersSnapshot = await getDocs(usersQuery);
+    } catch (error) {
+      console.warn('orderBy failed, fetching all users without order:', error);
+      // Si falla el orderBy (por campos faltantes), obtener todos sin ordenar
+      usersSnapshot = await getDocs(collection(db, USERS_COLLECTION));
+    }
+    
+    usersSnapshot.forEach((doc) => {
+      const data = doc.data();
+      users.push({
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate() || new Date(0), // Fecha por defecto si no existe
+        updatedAt: data.updatedAt?.toDate() || new Date(0),
+        lastGoogleSync: data.lastGoogleSync?.toDate() || null
+      });
+    });
+
+    // Ordenar manualmente por fecha de creación (más recientes primero)
+    users.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+    console.log(`Loaded ${users.length} users from Firestore`);
+    return users;
+  } catch (error) {
+    console.error('Error getting all users:', error);
+    return [];
+  }
+};
+
+/**
+ * Obtiene todos los usuarios desde múltiples fuentes (función para admin)
+ * @returns {Promise<Array>} Array con todos los usuarios únicos
+ */
+export const getAllUsersComprehensive = async () => {
+  try {
+    const allUsers = new Map(); // Usar Map para evitar duplicados
+    
+    // 1. Obtener usuarios de la colección users
+    try {
+      const usersFromCollection = await getAllUsers();
+      usersFromCollection.forEach(user => {
+        allUsers.set(user.id, user);
+      });
+    } catch (error) {
+      console.error('Error loading from users collection:', error);
+    }
+    
+    // 2. Obtener usuarios únicos de la colección participants
+    try {
+      const participantsSnapshot = await getDocs(collection(db, 'participants'));
+      const uniqueUserIds = new Set();
+      
+      participantsSnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.userId) {
+          uniqueUserIds.add(data.userId);
+        }
+      });
+      
+      // Para cada userId encontrado en participants, intentar obtener su perfil
+      for (const userId of uniqueUserIds) {
+        if (!allUsers.has(userId)) {
+          try {
+            const userProfile = await getUserProfile(userId);
+            if (userProfile) {
+              allUsers.set(userId, {
+                ...userProfile,
+                fromParticipants: true // Marca para identificar origen
+              });
+            } else {
+              // Usuario sin perfil, crear uno básico
+              allUsers.set(userId, {
+                id: userId,
+                displayName: `Usuario ${userId.slice(0, 8)}`,
+                email: '',
+                fullName: '',
+                createdAt: new Date(0),
+                updatedAt: new Date(0),
+                fromParticipants: true,
+                missingProfile: true
+              });
+            }
+          } catch (error) {
+            console.error(`Error loading profile for user ${userId}:`, error);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error loading from participants:', error);
+    }
+    
+    // Convertir Map a Array y ordenar
+    const users = Array.from(allUsers.values());
+    users.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    
+    console.log(`Loaded ${users.length} total users (from collections: users + participants)`);
+    return users;
+  } catch (error) {
+    console.error('Error in comprehensive user loading:', error);
+    return [];
+  }
+};
+
+/**
+ * Obtiene todas las jams en las que un usuario ha participado
+ * @param {string} userId - ID del usuario
+ * @returns {Promise<Array>} Array de participaciones
+ */
+export const getUserJamHistory = async (userId) => {
+  try {
+    let participationsSnapshot;
+    
+    try {
+      const participationsQuery = query(
+        collection(db, 'participants'),
+        where('userId', '==', userId),
+        where('isActive', '==', true),
+        orderBy('joinedAt', 'desc')
+      );
+      participationsSnapshot = await getDocs(participationsQuery);
+    } catch (error) {
+      console.warn('orderBy failed for jam history, fetching without order:', error);
+      // Si falla el orderBy, obtener sin ordenar
+      const participationsQuery = query(
+        collection(db, 'participants'),
+        where('userId', '==', userId),
+        where('isActive', '==', true)
+      );
+      participationsSnapshot = await getDocs(participationsQuery);
+    }
+    
+    const participations = [];
+    
+    participationsSnapshot.forEach((doc) => {
+      const data = doc.data();
+      participations.push({
+        id: doc.id,
+        ...data,
+        joinedAt: data.joinedAt?.toDate() || new Date()
+      });
+    });
+
+    // Ordenar manualmente por fecha
+    participations.sort((a, b) => b.joinedAt.getTime() - a.joinedAt.getTime());
+
+    return participations;
+  } catch (error) {
+    console.error('Error getting user jam history:', error);
+    return [];
   }
 };
 

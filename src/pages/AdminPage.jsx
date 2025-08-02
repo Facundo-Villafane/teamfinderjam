@@ -1,6 +1,7 @@
+// src/pages/AdminPage.jsx - Versión actualizada con gestión de usuarios
 import React, { useState } from 'react'
 
-// Importar hooks personalizados (uno por uno para debuggear)
+// Importar hooks personalizados
 import { useAdminData } from '../hooks/useAdminData'
 import { usePostActions } from '../hooks/usePostActions'
 import { useThemeActions } from '../hooks/useThemeActions'
@@ -14,6 +15,7 @@ import { JamEditor } from '../components/admin/JamEditor'
 import { ThemesTab } from '../components/admin/ThemesTab'
 import { ThemeEditor } from '../components/admin/ThemeEditor'
 import { CertificatesTab } from '../components/admin/CertificatesTab'
+import { UsersTab } from '../components/admin/UsersTab' // NUEVO COMPONENTE
 import { MigrationTool } from '../components/admin/MigrationTool'
 
 // Importar funciones directamente para evitar problemas de importación
@@ -53,7 +55,7 @@ const AdminPage = ({ user }) => {
     handleSelectWinner
   } = useThemeActions(user)
 
-  // ===== ACCIONES DE JAM (implementadas directamente) =====
+  // ===== ACCIONES DE JAM =====
   
   const handleSaveJam = async (jamData) => {
     try {
@@ -74,7 +76,7 @@ const AdminPage = ({ user }) => {
     }
   }
 
-  const handleDeleteJam = async (jamId, jams) => {
+  const handleDeleteJam = async (jamId) => {
     if (window.confirm('¿Estás seguro de eliminar esta jam? Esto también eliminará todos los posts asociados.')) {
       try {
         const jam = jams.find(j => j.id === jamId)
@@ -89,26 +91,15 @@ const AdminPage = ({ user }) => {
     }
   }
 
-  const handleToggleActive = async (jamId, jams) => {
+  const handleToggleActive = async (jamId) => {
     try {
       const jam = jams.find(j => j.id === jamId)
-      const newActiveState = !jam.active
-      
-      if (newActiveState) {
-        await setActiveJam(jamId)
-      } else {
-        await setActiveJam(null)
-      }
-      
-      await logAdminAction(user.uid, 'toggle_jam_active', { 
-        jamId, 
-        jamName: jam?.name, 
-        newState: newActiveState 
-      })
-      
+      await setActiveJam(jamId)
+      await logAdminAction(user.uid, 'toggle_active_jam', { jamId, jamName: jam?.name })
       await loadAllData()
+      alert('Jam status updated!')
     } catch (error) {
-      console.error('Error toggling jam active:', error)
+      console.error('Error toggling jam status:', error)
       alert('Error updating jam status')
     }
   }
@@ -138,30 +129,30 @@ const AdminPage = ({ user }) => {
   const renderTabContent = () => {
     switch (currentTab) {
       case 'overview':
-        return <OverviewTab stats={stats} jams={jams} onRefresh={loadAllData} />
-      
+        return <OverviewTab stats={stats} jams={jams} />
+        
       case 'jams':
         return (
           <JamsTab
             jams={jams}
             onCreateJam={handleCreateJam}
             onEditJam={handleEditJam}
-            onDeleteJam={(jamId) => handleDeleteJam(jamId, jams)}
-            onToggleActive={(jamId) => handleToggleActive(jamId, jams)}
+            onDeleteJam={handleDeleteJam}
+            onToggleActive={handleToggleActive}
           />
         )
-      
+        
       case 'moderation':
         return (
           <ModerationTab
             posts={posts}
-            onToggleFeatured={(postId) => handleToggleFeatured(postId, posts)}
-            onToggleFlagged={(postId) => handleToggleFlagged(postId, posts)}
-            onDeletePost={(postId) => handleDeletePost(postId, posts)}
+            onToggleFeatured={handleToggleFeatured}
+            onToggleFlagged={handleToggleFlagged}
+            onDeletePost={handleDeletePost}
             loading={loading}
           />
         )
-      
+        
       case 'themes':
         return (
           <ThemesTab
@@ -171,71 +162,83 @@ const AdminPage = ({ user }) => {
             onCreateTheme={handleCreateTheme}
             onEditTheme={handleEditTheme}
             onDeleteTheme={handleDeleteTheme}
-            onToggleVoting={(jam) => handleToggleVoting(jam, loadAllData)}
-            onSelectWinner={(theme) => handleSelectWinner(theme, loadAllData)}
+            onToggleVoting={handleToggleVoting}
+            onSelectWinner={handleSelectWinner}
           />
         )
-      
+        
       case 'certificates':
         return (
-          <CertificatesTab 
-            currentJam={activeJam} 
-            onRefresh={loadAllData} 
+          <CertificatesTab
+            currentJam={activeJam}
+            onRefresh={loadAllData}
           />
         )
-      
+        
+      case 'users':
+        return (
+          <UsersTab
+            currentJam={activeJam}
+          />
+        )
+        
       case 'migration':
         return (
-          <MigrationTool 
-            currentJam={activeJam} 
-            onRefresh={loadAllData} 
+          <MigrationTool
+            currentJam={activeJam}
+            onRefresh={loadAllData}
           />
         )
-      
+        
       default:
-        return (
-          <div className="text-center py-12">
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Sección en desarrollo</h3>
-            <p className="text-gray-500">Esta funcionalidad estará disponible pronto.</p>
-          </div>
-        )
+        return <div className="text-white">Pestaña no encontrada</div>
     }
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header de admin */}
-      <div className="text-center">
-        <h1 className="text-4xl font-bold text-white mb-4">
-          ⚙️ Panel de Administración
-        </h1>
-        <p className="text-gray-300 text-lg">
-          Gestiona jams, temas, posts y configuraciones
-        </p>
-        <div className="mt-4 inline-block px-4 py-2 rounded-lg bg-red-900 border border-red-600">
-          <span className="text-red-200 font-semibold">👑 Acceso de Administrador</span>
-        </div>
-        
-        {activeJam && (
-          <div className="mt-4 inline-block px-4 py-2 rounded-lg bg-green-900 border border-green-600 ml-4">
-            <span className="text-green-200 font-semibold">🎮 Jam Activa: {activeJam.name}</span>
+    <div className="min-h-screen bg-gray-900">
+      {/* Header del admin */}
+      <div className="bg-gray-800 border-b border-gray-700 px-4 py-3">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold">
+              A
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-white">Panel de Administración</h1>
+              <p className="text-sm text-gray-400">
+                Bienvenido, {user?.displayName || user?.email}
+              </p>
+            </div>
           </div>
-        )}
+          
+          <div className="flex items-center gap-4">
+            {activeJam && (
+              <div className="text-right">
+                <p className="text-sm text-gray-400">Jam Activa:</p>
+                <p className="text-white font-medium">{activeJam.name}</p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="text-white text-xl">Cargando datos de admin...</div>
-        </div>
-      ) : (
-        <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
-          <AdminTabs currentTab={currentTab} onTabChange={setCurrentTab} />
-          
-          <div className="p-6">
-            {renderTabContent()}
+      {/* Navegación de pestañas */}
+      <AdminTabs currentTab={currentTab} onTabChange={setCurrentTab} />
+
+      {/* Contenido principal */}
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <div className="text-white text-xl">Cargando datos...</div>
+            </div>
           </div>
-        </div>
-      )}
+        ) : (
+          renderTabContent()
+        )}
+      </div>
 
       {/* Modales */}
       {editingJam && (

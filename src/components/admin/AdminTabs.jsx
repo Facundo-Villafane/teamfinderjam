@@ -1,6 +1,15 @@
-// src/components/admin/AdminTabs.jsx
+// src/components/admin/AdminTabs.jsx - Con pestaña de usuarios
 import React from 'react';
-import { BarChart3, Calendar, Shield, Vote, Users, Award } from 'lucide-react';
+import { 
+  BarChart3, 
+  Calendar, 
+  Shield, 
+  Vote, 
+  Users, 
+  Award,
+  UserCog,
+  Database
+} from 'lucide-react';
 
 export const AdminTabs = ({ currentTab, onTabChange }) => {
   const tabs = [
@@ -9,21 +18,22 @@ export const AdminTabs = ({ currentTab, onTabChange }) => {
     { id: 'moderation', name: 'Moderación', icon: Shield },
     { id: 'themes', name: 'Temas', icon: Vote },
     { id: 'certificates', name: 'Certificados', icon: Award },
-    { id: 'migration', name: 'Migración', icon: Users }
+    { id: 'users', name: 'Usuarios', icon: UserCog }, // NUEVA PESTAÑA
+    { id: 'migration', name: 'Migración', icon: Database }
   ];
 
   return (
-    <div className="bg-white border-b">
+    <div className="bg-gray-900 border-b border-gray-700">
       <div className="max-w-7xl mx-auto px-4">
-        <nav className="flex space-x-8">
+        <nav className="flex space-x-8 overflow-x-auto">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
                 currentTab === tab.id
-                  ? 'border-orange-500 text-orange-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-blue-500 text-blue-400'
+                  : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-600'
               }`}
             >
               <tab.icon className="w-4 h-4" />
