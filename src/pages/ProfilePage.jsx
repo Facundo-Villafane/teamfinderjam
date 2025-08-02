@@ -16,7 +16,8 @@ import {
   Settings,
   Star,
   Eye,
-  X
+  X,
+  Calendar
 } from 'lucide-react';
 import { getPostsByUser } from '../firebase/firestore';
 import { getUserJamHistory } from '../firebase/participants';
