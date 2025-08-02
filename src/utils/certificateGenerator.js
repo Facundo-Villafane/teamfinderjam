@@ -277,7 +277,13 @@ const addCustomCertificateText = (pdf, certificateData, pageWidth, pageHeight, c
         return;
       }
       
+      // Detectar si la línea contiene múltiples nombres (para ajustar formato)
+      const hasMultipleNames = line.includes(' y ') && line.includes(',');
+      const isNameLine = line.includes(certificateData.userName) && certificateData.userName.includes(' y ');
+      
       if (line.includes('LO LOGRASTE') || 
+          line.includes('lo lograste') ||
+          line.includes('lo lograron') ||
           line.includes('no se fuerza, se nota') ||
           line.includes('no hay límites') ||
           line.includes('lo entendió perfectamente') ||
@@ -285,12 +291,12 @@ const addCustomCertificateText = (pdf, certificateData, pageWidth, pageHeight, c
           line.includes('conduce') ||
           line.match(/\*\*.*\*\*/)) {
         
-        const parts = line.split(/(\*\*.*?\*\*|LO LOGRASTE|no se fuerza, se nota|no hay límites|lo entendió perfectamente|con intención|conduce)/);
+        const parts = line.split(/(\*\*.*?\*\*|LO LOGRASTE|lo lograste|lo lograron|no se fuerza, se nota|no hay límites|lo entendió perfectamente|con intención|conduce)/);
         let xOffset = 0;
         const startX = centerX - (pdf.getTextWidth(line.replace(/\*\*/g, '')) / 2);
         
         parts.forEach(part => {
-          if (part.match(/\*\*.*\*\*|LO LOGRASTE|no se fuerza, se nota|no hay límites|lo entendió perfectamente|con intención|conduce/)) {
+          if (part.match(/\*\*.*\*\*|LO LOGRASTE|lo lograste|lo lograron|no se fuerza, se nota|no hay límites|lo entendió perfectamente|con intención|conduce/)) {
             pdf.setFont('helvetica', 'bold');
             pdf.setTextColor(255, 255, 255);
             const cleanText = part.replace(/\*\*/g, '');
@@ -303,6 +309,19 @@ const addCustomCertificateText = (pdf, certificateData, pageWidth, pageHeight, c
             xOffset += pdf.getTextWidth(part);
           }
         });
+      } else if (isNameLine || hasMultipleNames) {
+        // Para líneas con múltiples nombres, usar un tamaño de fuente ligeramente menor si es muy largo
+        const textWidth = pdf.getTextWidth(line);
+        if (textWidth > pageWidth - 60) {
+          pdf.setFontSize(10);
+        }
+        
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(200, 200, 200);
+        pdf.text(line, centerX, yPosition, { align: 'center' });
+        
+        // Restaurar tamaño de fuente
+        pdf.setFontSize(12);
       } else {
         pdf.setFont('helvetica', 'normal');
         pdf.setTextColor(200, 200, 200);

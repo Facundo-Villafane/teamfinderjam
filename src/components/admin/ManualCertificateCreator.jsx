@@ -185,24 +185,23 @@ export const ManualCertificateCreator = ({ currentJam, onSuccess, onCancel }) =>
       const userName = getDisplayName(selectedParticipants[0]);
       text = text.replace(/\[NOMBRE\]/g, userName);
     } else {
-      // Para múltiples participantes, usar nombres personalizados si están disponibles
+      // Para múltiples participantes, mostrar TODOS los nombres
       const names = selectedParticipants
         .map(id => getDisplayName(id))
         .filter(name => name && name.trim() !== '' && name !== 'Usuario sin nombre');
       
       let nameText;
-      if (names.length <= 3) {
-        // Si son 3 o menos, mostrar todos los nombres
-        if (names.length === 2) {
-          nameText = names.join(' y ');
-        } else {
-          nameText = names.slice(0, -1).join(', ') + ' y ' + names[names.length - 1];
-        }
+      if (names.length === 2) {
+        // Dos personas: "Juan y María"
+        nameText = names.join(' y ');
+      } else if (names.length > 2) {
+        // Más de dos: "Juan, María, Carlos y Ana"
+        const allButLast = names.slice(0, -1);
+        const lastName = names[names.length - 1];
+        nameText = allButLast.join(', ') + ' y ' + lastName;
       } else {
-        // Si son más de 3, mostrar los primeros nombres y "y X más"
-        const firstNames = names.slice(0, 2);
-        const remainingCount = names.length - 2;
-        nameText = firstNames.join(', ') + ` y ${remainingCount} participantes más`;
+        // Fallback por si hay problemas con nombres
+        nameText = names.join(', ');
       }
       
       text = text.replace(/\[NOMBRE\]/g, nameText);
@@ -256,13 +255,13 @@ export const ManualCertificateCreator = ({ currentJam, onSuccess, onCancel }) =>
     participation: {
       title: 'Certificado de Participación',
       subtitle: currentJam?.name || 'Game Jam',
-      mainText: `Este certificado se otorga a:\n\n[NOMBRE]\n\nPor haber participado activamente en la creación de un videojuego durante la Game Jam.\n\nSabemos que no es fácil hacer un juego en pocos días. Sabemos que dormir tampoco ayudó.\n\nPero lo lograste. Felicitaciones.`,
+      mainText: `Este certificado se otorga a:\n\n[NOMBRE]\n\nPor haber participado activamente en la creación de un videojuego durante la Game Jam.\n\nSabemos que no es fácil hacer un juego en pocos días. Sabemos que dormir tampoco ayudó.\n\nPero lo lograron. Felicitaciones.`,
       signature: 'Equipo Organizador'
     },
     recognition: {
       title: 'Certificado de Reconocimiento',
       subtitle: currentJam?.name || 'Game Jam',
-      mainText: `Este certificado se otorga a:\n\n[NOMBRE]\n\nPor haber creado un juego excepcional que se destaca por su calidad e innovación.\n\nTu trabajo demuestra talento, dedicación y creatividad excepcionales.`,
+      mainText: `Este certificado se otorga a:\n\n[NOMBRE]\n\nPor haber creado un juego excepcional que se destaca por su calidad e innovación.\n\nSu trabajo demuestra talento, dedicación y creatividad excepcionales.`,
       signature: 'Jurado de la Game Jam'
     }
   };
