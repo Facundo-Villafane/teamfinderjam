@@ -555,8 +555,7 @@ const ProfilePage = ({ user }) => {
           certificate={previewCertificate}
           userName={userProfile?.fullName || user.displayName || 'Participante'}
           onClose={() => setPreviewCertificate(null)}
-          onDownload={() => handleDownloadCertificate(previewCertificate)}
-          isModal={true}
+          onDownload={handleDownloadCertificate}
         />
       )}
     </div>
