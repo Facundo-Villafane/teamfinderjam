@@ -551,31 +551,13 @@ const ProfilePage = ({ user }) => {
 
       {/* Modal de Preview de Certificado */}
       {previewCertificate && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-800 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-white">
-                  Vista Previa del Certificado
-                </h2>
-                <button
-                  onClick={() => setPreviewCertificate(null)}
-                  className="text-gray-400 hover:text-white"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-              
-              <CertificatePreview
-                certificate={{
-                  ...previewCertificate,
-                  userName: userProfile?.fullName || user.displayName || 'Participante'
-                }}
-                onDownload={() => handleDownloadCertificate(previewCertificate)}
-              />
-            </div>
-          </div>
-        </div>
+        <CertificatePreview
+          certificate={previewCertificate}
+          userName={userProfile?.fullName || user.displayName || 'Participante'}
+          onClose={() => setPreviewCertificate(null)}
+          onDownload={() => handleDownloadCertificate(previewCertificate)}
+          isModal={true}
+        />
       )}
     </div>
   );
