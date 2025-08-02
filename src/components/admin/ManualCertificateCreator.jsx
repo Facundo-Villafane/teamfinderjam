@@ -1,5 +1,4 @@
 // src/components/admin/ManualCertificateCreator.jsx - Versión mejorada
-
 import React, { useState, useEffect } from 'react';
 import { 
   Award, 
@@ -24,27 +23,31 @@ import {
   FaLightbulb 
 } from 'react-icons/fa';
 import { getJamParticipants } from '../../firebase/participants';
-import { getUserDisplayName } from '../../firebase/users';
+import { getUserDisplayName, getUserProfile } from '../../firebase/users';
 import { createCustomCertificate } from '../../firebase/certificates';
+import { auth } from '../../firebase/config';
 
 export const ManualCertificateCreator = ({ currentJam, onSuccess, onCancel }) => {
-  const [step, setStep] = useState(1); // 1: Tipo, 2: Contenido, 3: Participantes
+  const [step, setStep] = useState(1);
   
-  // Datos del certificado
   const [certificateData, setCertificateData] = useState({
-    type: '', // 'participation' | 'recognition'
+    type: '',
     category: '',
     title: '',
     subtitle: '',
     mainText: '',
     signature: '',
-    gameName: '', // Nuevo campo para el nombre del juego
+    gameName: '',
+    gameLink: '', // Nuevo campo para el link del juego
     isWinner: false
   });
   
   const [selectedParticipants, setSelectedParticipants] = useState([]);
   const [participants, setParticipants] = useState([]);
   const [userNames, setUserNames] = useState({});
+  const [userProfiles, setUserProfiles] = useState({}); // Para almacenar perfiles completos
+  const [customNames, setCustomNames] = useState({}); // Para nombres personalizados
+  const [editingName, setEditingName] = useState(null); // ID del usuario siendo editado
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -56,108 +59,227 @@ export const ManualCertificateCreator = ({ currentJam, onSuccess, onCancel }) =>
     { id: 'sound', name: 'Música y Sonido', emoji: '🎵' }
   ];
 
-  // Plantillas mejoradas
-  const templates = {
-    participation: {
-      title: 'Certificado de Participación',
-      subtitle: currentJam?.name || 'Game Jam',
-      mainText: `Este certificado se otorga a:\n\n[NOMBRE]\n\nPor haber participado activamente en la creación de un videojuego durante la Game Jam.\n\nSabemos que no es fácil hacer un juego en pocos días. Sabemos que dormir tampoco ayudó. Pero aún así, LO LOGRASTE.\n\nCon admiración y un poquito de envidia,`,
-      signature: `Organización de ${currentJam?.name || 'la Game Jam'}`
-    },
-    recognition: {
-      originality: {
-        title: '🏆 Certificado – Mención Especial a la Originalidad',
-        subtitle: '',
-        mainText: `Este certificado reconoce al juego:\n\n[JUEGO]\n\nCreado por: [NOMBRE]\n\nPor destacarse en su enfoque único, inesperado o fuera de lo común.\n\nCuando todos pensaban en una cosa, este equipo fue por otra.\nPorque la originalidad no se fuerza, se nota.`,
-        signature: currentJam?.name || 'Game Jam'
-      },
-      creativity: {
-        title: '🎨 Certificado – Mención Especial a la Creatividad', 
-        subtitle: '',
-        mainText: `Se otorga al juego:\n\n[JUEGO]\n\nCreado por: [NOMBRE]\n\nPor su capacidad para imaginar lo improbable y hacerlo jugable.\nCreatividad no es solo tener ideas... es convertirlas en una experiencia inolvidable.\n\nGracias por demostrar que no hay límites cuando se trata de crear.`,
-        signature: currentJam?.name || 'Game Jam'
-      },
-      narrative: {
-        title: '📖 Certificado – Mención Especial a la Narrativa',
-        subtitle: '',
-        mainText: `Reconociendo al juego:\n\n[JUEGO]\n\nCreado por: [NOMBRE]\n\nPor construir una historia que atrapó, emocionó o hizo pensar.\n\nLa narrativa no siempre necesita palabras,\ny este juego lo entendió perfectamente.`,
-        signature: currentJam?.name || 'Game Jam'
-      },
-      aesthetics: {
-        title: '🎨 Certificado – Mención Especial a la Dirección de Arte',
-        subtitle: '',
-        mainText: `Otorgado al juego:\n\n[JUEGO]\n\nCreado por: [NOMBRE]\n\nPor su identidad visual fuerte, coherente y con carácter.\nColores, formas, estilo… todo encajó para crear una estética inolvidable.\n\nUna obra que se ve con intención.`,
-        signature: currentJam?.name || 'Game Jam'
-      },
-      sound: {
-        title: '🎵 Certificado – Mención Especial a la Música y Sonido',
-        subtitle: '',
-        mainText: `Reconociendo al juego:\n\n[JUEGO]\n\nCreado por: [NOMBRE]\n\nPor crear una experiencia auditiva que acompaña, emociona y conduce.\n\nEl sonido que hace que cada momento se sienta exactamente como debe ser.`,
-        signature: currentJam?.name || 'Game Jam'
+  // Función para obtener el nombre a mostrar (personalizado o original)
+  const getDisplayName = (userId) => {
+    return customNames[userId] || userNames[userId] || 'Usuario sin nombre';
+  };
+
+  // Función para actualizar nombre personalizado
+  const updateCustomName = (userId, newName) => {
+    setCustomNames(prev => ({
+      ...prev,
+      [userId]: newName.trim()
+    }));
+  };
+
+  // Función para iniciar edición de nombre
+  const startEditingName = (userId) => {
+    setEditingName(userId);
+  };
+
+  // Función para guardar nombre editado
+  const saveEditedName = (userId, newName) => {
+    if (newName.trim()) {
+      updateCustomName(userId, newName.trim());
+    }
+    setEditingName(null);
+  };
+
+  // Función para cancelar edición
+  const cancelEditingName = () => {
+    setEditingName(null);
+  };
+  const getEnhancedUserName = async (userId) => {
+    try {
+      // Primero intentar obtener del perfil del usuario
+      const userProfile = await getUserProfile(userId);
+      
+      if (userProfile) {
+        // Prioridad: fullName > displayName > name > email > Google display name
+        if (userProfile.fullName && userProfile.fullName.trim()) {
+          return userProfile.fullName.trim();
+        }
+        
+        if (userProfile.displayName && userProfile.displayName.trim()) {
+          return userProfile.displayName.trim();
+        }
+        
+        if (userProfile.name && userProfile.name.trim()) {
+          return userProfile.name.trim();
+        }
+        
+        if (userProfile.email) {
+          const emailName = userProfile.email.split('@')[0];
+          return emailName.charAt(0).toUpperCase() + emailName.slice(1);
+        }
       }
+      
+      // Si no hay perfil o está incompleto, intentar obtener de Google
+      const currentUser = auth.currentUser;
+      if (currentUser && currentUser.uid === userId) {
+        if (currentUser.displayName) {
+          return currentUser.displayName;
+        }
+        if (currentUser.email) {
+          const emailName = currentUser.email.split('@')[0];
+          return emailName.charAt(0).toUpperCase() + emailName.slice(1);
+        }
+      }
+      
+      // Fallback al método original
+      return await getUserDisplayName(userId);
+      
+    } catch (error) {
+      console.error('Error getting enhanced user name:', error);
+      return await getUserDisplayName(userId);
     }
   };
 
   useEffect(() => {
-    loadParticipants();
-  }, [currentJam]);
+    const loadData = async () => {
+      if (currentJam?.id) {
+        await loadParticipants();
+      }
+    };
+    loadData();
+  }, [currentJam?.id]); // Solo depender del ID
 
   const loadParticipants = async () => {
     try {
+      setLoading(true);
       const participantsList = await getJamParticipants(currentJam.id);
       setParticipants(participantsList);
+
+      // Cargar nombres y perfiles mejorados
+      const namesMap = {};
+      const profilesMap = {};
       
-      // Cargar nombres de usuarios
-      const names = {};
       for (const participant of participantsList) {
-        const name = await getUserDisplayName(participant.userId);
-        names[participant.userId] = name;
+        // Obtener nombre mejorado
+        const enhancedName = await getEnhancedUserName(participant.userId);
+        namesMap[participant.userId] = enhancedName;
+        
+        // Obtener perfil completo para información adicional
+        const profile = await getUserProfile(participant.userId);
+        if (profile) {
+          profilesMap[participant.userId] = profile;
+        }
       }
-      setUserNames(names);
+      
+      setUserNames(namesMap);
+      setUserProfiles(profilesMap);
     } catch (error) {
       console.error('Error loading participants:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleTypeSelection = (type) => {
-    setCertificateData(prev => ({ 
-      ...prev, 
-      type,
-      isWinner: type === 'recognition' 
-    }));
+  // Función mejorada para generar texto de vista previa
+  const getPreviewText = () => {
+    let text = certificateData.mainText;
     
-    // Cargar plantilla de participación
-    if (type === 'participation') {
-      const template = templates.participation;
-      setCertificateData(prev => ({
-        ...prev,
-        title: template.title,
-        subtitle: template.subtitle,
-        mainText: template.mainText,
-        signature: template.signature
-      }));
+    if (selectedParticipants.length === 0) {
+      text = text.replace(/\[NOMBRE\]/g, '[NOMBRE DEL PARTICIPANTE]');
+    } else if (selectedParticipants.length === 1) {
+      const userName = getDisplayName(selectedParticipants[0]);
+      text = text.replace(/\[NOMBRE\]/g, userName);
+    } else {
+      // Para múltiples participantes, usar nombres personalizados si están disponibles
+      const names = selectedParticipants
+        .map(id => getDisplayName(id))
+        .filter(name => name && name.trim() !== '' && name !== 'Usuario sin nombre');
+      
+      let nameText;
+      if (names.length <= 3) {
+        // Si son 3 o menos, mostrar todos los nombres
+        if (names.length === 2) {
+          nameText = names.join(' y ');
+        } else {
+          nameText = names.slice(0, -1).join(', ') + ' y ' + names[names.length - 1];
+        }
+      } else {
+        // Si son más de 3, mostrar los primeros nombres y "y X más"
+        const firstNames = names.slice(0, 2);
+        const remainingCount = names.length - 2;
+        nameText = firstNames.join(', ') + ` y ${remainingCount} participantes más`;
+      }
+      
+      text = text.replace(/\[NOMBRE\]/g, nameText);
     }
     
-    setStep(2);
+    return text;
   };
 
-  const handleCategorySelection = (category) => {
-    setCertificateData(prev => ({ 
-      ...prev, 
-      category,
-      type: 'recognition',
-      isWinner: true
-    }));
+  // Función para obtener información de vista previa de participantes
+  const getParticipantsPreviewInfo = () => {
+    if (selectedParticipants.length === 0) {
+      return 'Ningún participante seleccionado';
+    }
     
-    // Cargar plantilla de reconocimiento
-    const template = templates.recognition[category];
+    if (selectedParticipants.length === 1) {
+      const userId = selectedParticipants[0];
+      const name = getDisplayName(userId);
+      const profile = userProfiles[userId];
+      
+      return (
+        <div className="text-sm">
+          <div className="font-medium text-blue-300">{name}</div>
+          {profile?.email && (
+            <div className="text-gray-400">{profile.email}</div>
+          )}
+          {profile?.itchUsername && (
+            <div className="text-gray-400">itch.io: {profile.itchUsername}</div>
+          )}
+        </div>
+      );
+    }
+    
+    return (
+      <div className="text-sm">
+        <div className="font-medium text-blue-300 mb-2">
+          {selectedParticipants.length} participantes seleccionados:
+        </div>
+        <div className="max-h-32 overflow-y-auto space-y-1">
+          {selectedParticipants.map(userId => (
+            <div key={userId} className="text-gray-300 flex items-center gap-2">
+              <Check className="w-3 h-3 text-green-400" />
+              {getDisplayName(userId)}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const templates = {
+    participation: {
+      title: 'Certificado de Participación',
+      subtitle: currentJam?.name || 'Game Jam',
+      mainText: `Este certificado se otorga a:\n\n[NOMBRE]\n\nPor haber participado activamente en la creación de un videojuego durante la Game Jam.\n\nSabemos que no es fácil hacer un juego en pocos días. Sabemos que dormir tampoco ayudó.\n\nPero lo lograste. Felicitaciones.`,
+      signature: 'Equipo Organizador'
+    },
+    recognition: {
+      title: 'Certificado de Reconocimiento',
+      subtitle: currentJam?.name || 'Game Jam',
+      mainText: `Este certificado se otorga a:\n\n[NOMBRE]\n\nPor haber creado un juego excepcional que se destaca por su calidad e innovación.\n\nTu trabajo demuestra talento, dedicación y creatividad excepcionales.`,
+      signature: 'Jurado de la Game Jam'
+    }
+  };
+
+  const handleTypeSelection = (type, category = '') => {
+    const template = templates[type];
+    
     if (template) {
       setCertificateData(prev => ({
         ...prev,
-        title: template.title,
+        type,
+        category,
+        title: template.title + (category ? ` - ${recognitionCategories.find(c => c.id === category)?.name}` : ''),
         subtitle: template.subtitle,
         mainText: template.mainText,
-        signature: template.signature
+        signature: template.signature,
+        isWinner: type === 'recognition'
       }));
     }
     
@@ -198,7 +320,6 @@ export const ManualCertificateCreator = ({ currentJam, onSuccess, onCancel }) =>
       return;
     }
 
-    // Para reconocimientos de juego grupal, requerir nombre del juego
     if (certificateData.type === 'recognition' && selectedParticipants.length > 1 && !certificateData.gameName) {
       alert('Para reconocimientos grupales, especifica el nombre del juego');
       return;
@@ -207,13 +328,11 @@ export const ManualCertificateCreator = ({ currentJam, onSuccess, onCancel }) =>
     setLoading(true);
     try {
       const promises = selectedParticipants.map(userId => {
-        // Preparar datos específicos para cada participante
         const participantData = {
           ...certificateData,
-          // Asegurar que los reconocimientos estén marcados correctamente
           isWinner: certificateData.type === 'recognition',
-          // Para reconocimientos grupales, usar el nombre del juego
-          gameName: certificateData.type === 'recognition' ? certificateData.gameName : null
+          gameName: certificateData.type === 'recognition' ? certificateData.gameName : null,
+          gameLink: certificateData.type === 'recognition' ? certificateData.gameLink : null
         };
         
         return createCustomCertificate(userId, currentJam.id, participantData);
@@ -233,36 +352,21 @@ export const ManualCertificateCreator = ({ currentJam, onSuccess, onCancel }) =>
     }
   };
 
-  const filteredParticipants = participants.filter(participant =>
-    userNames[participant.userId]?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const getPreviewText = () => {
-    let text = certificateData.mainText;
+  const filteredParticipants = participants.filter(participant => {
+    const userName = getDisplayName(participant.userId);
+    const userEmail = userProfiles[participant.userId]?.email || '';
+    const searchLower = searchTerm.toLowerCase();
     
-    // Reemplazar placeholders
-    if (selectedParticipants.length === 1) {
-      const userName = userNames[selectedParticipants[0]] || 'Participante';
-      text = text.replace(/\[NOMBRE\]/g, userName);
-    } else if (selectedParticipants.length > 1) {
-      // Para múltiples participantes, mostrar nombres o "Equipo"
-      const names = selectedParticipants.map(id => userNames[id]).join(', ');
-      text = text.replace(/\[NOMBRE\]/g, names.length > 50 ? `Equipo de ${selectedParticipants.length} integrantes` : names);
-    }
-    
-    if (certificateData.gameName) {
-      text = text.replace(/\[JUEGO\]/g, certificateData.gameName);
-    }
-    
-    return text;
-  };
+    return userName.toLowerCase().includes(searchLower) || 
+           userEmail.toLowerCase().includes(searchLower);
+  });
 
   // STEP 1: Selección de tipo
   if (step === 1) {
     return (
       <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-bold text-white">Crear Certificado Personalizado</h3>
+          <h3 className="text-lg font-bold text-white">Crear Certificados Personalizados</h3>
           <button onClick={onCancel} className="text-gray-400 hover:text-white">
             <X className="w-5 h-5" />
           </button>
@@ -271,7 +375,6 @@ export const ManualCertificateCreator = ({ currentJam, onSuccess, onCancel }) =>
         <div className="space-y-4">
           <h4 className="text-white font-medium">¿Qué tipo de certificado quieres crear?</h4>
           
-          {/* Certificado de Participación */}
           <button
             onClick={() => handleTypeSelection('participation')}
             className="w-full p-4 bg-blue-600 hover:bg-blue-700 rounded-lg text-left transition-colors"
@@ -279,26 +382,25 @@ export const ManualCertificateCreator = ({ currentJam, onSuccess, onCancel }) =>
             <div className="flex items-center gap-3">
               <Award className="w-6 h-6 text-white" />
               <div>
-                <h5 className="font-bold text-white">Certificado de Participación</h5>
-                <p className="text-blue-200 text-sm">Texto completamente personalizable</p>
+                <h5 className="font-bold text-white">Certificados de Participación</h5>
+                <p className="text-blue-200 text-sm">Para todos los participantes de la jam</p>
               </div>
             </div>
           </button>
 
-          {/* Certificados de Reconocimiento */}
           <div className="space-y-3">
             <h5 className="text-white font-medium">Certificados de Reconocimiento:</h5>
             {recognitionCategories.map((category) => (
               <button
                 key={category.id}
-                onClick={() => handleCategorySelection(category.id)}
+                onClick={() => handleTypeSelection('recognition', category.id)}
                 className="w-full p-4 bg-gray-700 hover:bg-gray-600 rounded-lg text-left transition-colors border border-gray-600"
               >
                 <div className="flex items-center gap-3">
                   <div className="text-2xl">{category.emoji}</div>
-                  <div>
+                  <div className="flex-1">
                     <h6 className="font-bold text-white">{category.name}</h6>
-                    <p className="text-gray-300 text-sm">Para juegos destacados - Selección múltiple disponible</p>
+                    <p className="text-gray-300 text-sm">Mención especial para juegos destacados</p>
                   </div>
                 </div>
               </button>
@@ -309,7 +411,7 @@ export const ManualCertificateCreator = ({ currentJam, onSuccess, onCancel }) =>
     );
   }
 
-  // STEP 2: Personalización del contenido
+  // STEP 2: Edición de contenido
   if (step === 2) {
     return (
       <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 max-h-[80vh] overflow-y-auto">
@@ -319,104 +421,173 @@ export const ManualCertificateCreator = ({ currentJam, onSuccess, onCancel }) =>
               onClick={() => setStep(1)}
               className="text-gray-400 hover:text-white"
             >
-              ← Volver
+              ← Cambiar Tipo
             </button>
-            <h3 className="text-lg font-bold text-white">Personalizar Certificado</h3>
+            <h3 className="text-lg font-bold text-white">
+              Personalizar Contenido
+              {certificateData.type === 'recognition' && (
+                <span className="text-yellow-400 text-sm ml-2">
+                  ({recognitionCategories.find(c => c.id === certificateData.category)?.name})
+                </span>
+              )}
+            </h3>
           </div>
           <button onClick={onCancel} className="text-gray-400 hover:text-white">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="space-y-6">
-          {/* Campo para nombre del juego (solo para reconocimientos) */}
-          {certificateData.type === 'recognition' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Formulario de edición */}
+          <div className="space-y-4">
             <div>
-              <label className="block text-white font-medium mb-2">
-                <Trophy className="inline w-4 h-4 mr-2" />
-                Nombre del Juego
-                <span className="text-red-400 ml-1">*</span>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                <Type className="w-4 h-4 inline mr-1" />
+                Título del Certificado
               </label>
               <input
                 type="text"
-                value={certificateData.gameName}
-                onChange={(e) => updateCertificateData('gameName', e.target.value)}
-                placeholder="Ej: Super Mario Odyssey, Celeste..."
+                value={certificateData.title}
+                onChange={(e) => updateCertificateData('title', e.target.value)}
                 className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none"
+                placeholder="Ej: Certificado de Participación"
               />
-              <p className="text-sm text-gray-400 mt-1">
-                Especialmente importante para reconocimientos grupales
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Subtítulo
+              </label>
+              <input
+                type="text"
+                value={certificateData.subtitle}
+                onChange={(e) => updateCertificateData('subtitle', e.target.value)}
+                className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none"
+                placeholder="Ej: Game Jam 2024"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                <Edit3 className="w-4 h-4 inline mr-1" />
+                Contenido Principal
+              </label>
+              <textarea
+                value={certificateData.mainText}
+                onChange={(e) => updateCertificateData('mainText', e.target.value)}
+                rows={8}
+                className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none resize-none"
+                placeholder="Usa [NOMBRE] donde quieres que aparezca el nombre del participante"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                💡 Usa <code className="bg-gray-600 px-1 rounded">[NOMBRE]</code> para insertar automáticamente el nombre del participante
               </p>
             </div>
-          )}
 
-          {/* Título del certificado */}
-          <div>
-            <label className="block text-white font-medium mb-2">
-              <Type className="inline w-4 h-4 mr-2" />
-              Título del Certificado
-            </label>
-            <input
-              type="text"
-              value={certificateData.title}
-              onChange={(e) => updateCertificateData('title', e.target.value)}
-              placeholder="Ej: Certificado de Participación"
-              className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none"
-            />
-          </div>
+            {/* Campo adicional para reconocimientos grupales */}
+            {certificateData.type === 'recognition' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <Trophy className="w-4 h-4 inline mr-1" />
+                    Nombre del Juego (Para reconocimientos)
+                  </label>
+                  <input
+                    type="text"
+                    value={certificateData.gameName}
+                    onChange={(e) => updateCertificateData('gameName', e.target.value)}
+                    className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none"
+                    placeholder="Ej: Super Adventure Game"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Necesario para reconocimientos grupales
+                  </p>
+                </div>
 
-          {/* Subtítulo */}
-          <div>
-            <label className="block text-white font-medium mb-2">
-              Subtítulo (opcional)
-            </label>
-            <input
-              type="text"
-              value={certificateData.subtitle}
-              onChange={(e) => updateCertificateData('subtitle', e.target.value)}
-              placeholder="Ej: Game Jam 2025"
-              className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none"
-            />
-          </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    🔗 Link del Juego (Opcional)
+                  </label>
+                  <input
+                    type="url"
+                    value={certificateData.gameLink || ''}
+                    onChange={(e) => updateCertificateData('gameLink', e.target.value)}
+                    className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none"
+                    placeholder="https://tu-usuario.itch.io/tu-juego"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    📱 Se generará un código QR en el certificado para acceso directo
+                  </p>
+                </div>
+              </>
+            )}
 
-          {/* Contenido principal */}
-          <div>
-            <label className="block text-white font-medium mb-2">
-              <Edit3 className="inline w-4 h-4 mr-2" />
-              Contenido del Certificado
-            </label>
-            <textarea
-              value={certificateData.mainText}
-              onChange={(e) => updateCertificateData('mainText', e.target.value)}
-              placeholder="Contenido principal del certificado..."
-              rows={8}
-              className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none resize-none"
-            />
-            <div className="text-sm text-gray-400 mt-2">
-              <p><strong>Placeholders disponibles:</strong></p>
-              <p>• <code>[NOMBRE]</code> - Se reemplaza por el nombre del participante</p>
-              {certificateData.type === 'recognition' && (
-                <p>• <code>[JUEGO]</code> - Se reemplaza por el nombre del juego</p>
-              )}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Firma/Organización
+              </label>
+              <input
+                type="text"
+                value={certificateData.signature}
+                onChange={(e) => updateCertificateData('signature', e.target.value)}
+                placeholder="Ej: Organización de la Game Jam"
+                className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none"
+              />
             </div>
           </div>
 
-          {/* Firma */}
-          <div>
-            <label className="block text-white font-medium mb-2">
-              Firma/Organización
-            </label>
-            <input
-              type="text"
-              value={certificateData.signature}
-              onChange={(e) => updateCertificateData('signature', e.target.value)}
-              placeholder="Ej: Organización de la Game Jam"
-              className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none"
-            />
+          {/* Vista previa */}
+          <div className="bg-gray-900 border border-gray-600 rounded-lg p-4">
+            <h4 className="text-white font-medium mb-3 flex items-center gap-2">
+              <Eye className="w-4 h-4" />
+              Vista Previa
+            </h4>
+            
+            <div className="bg-white p-6 rounded-lg text-black min-h-[400px]">
+              <div className="text-center border-4 border-gray-800 p-8 h-full">
+                <h1 className="text-2xl font-bold mb-2">{certificateData.title || 'Título del Certificado'}</h1>
+                <h2 className="text-lg text-gray-600 mb-6">{certificateData.subtitle || 'Subtítulo'}</h2>
+                
+                <div className="my-8 text-center">
+                  <div className="whitespace-pre-line text-sm leading-relaxed">
+                    {getPreviewText() || 'Contenido del certificado...'}
+                  </div>
+                </div>
+                
+                <div className="mt-8 pt-4 border-t border-gray-300">
+                  <p className="text-sm font-medium">
+                    {certificateData.signature || 'Firma/Organización'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Información de participantes seleccionados */}
+            {selectedParticipants.length > 0 && (
+              <div className="mt-4 p-3 bg-gray-800 rounded-lg">
+                <h5 className="text-white font-medium mb-2">Participantes:</h5>
+                {getParticipantsPreviewInfo()}
+                
+                {/* Mostrar información del QR si hay gameLink */}
+                {certificateData.gameLink && (
+                  <div className="mt-3 p-2 bg-blue-900/30 border border-blue-600 rounded">
+                    <div className="flex items-center gap-2 text-blue-300">
+                      <span className="text-lg">📱</span>
+                      <span className="text-sm font-medium">QR Code incluido</span>
+                    </div>
+                    <p className="text-blue-200 text-xs mt-1">
+                      Enlace: {certificateData.gameLink}
+                    </p>
+                    <p className="text-blue-200 text-xs">
+                      Se generará un código QR en la esquina del certificado
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Botones de navegación */}
         <div className="flex justify-between pt-6 border-t border-gray-700 mt-6">
           <button
             onClick={() => setStep(1)}
@@ -474,7 +645,6 @@ export const ManualCertificateCreator = ({ currentJam, onSuccess, onCancel }) =>
             />
           </div>
 
-          {/* Controles de selección múltiple */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button
@@ -520,62 +690,151 @@ export const ManualCertificateCreator = ({ currentJam, onSuccess, onCancel }) =>
 
         {/* Lista de participantes */}
         <div className="space-y-2 mb-6 max-h-60 overflow-y-auto">
-          {filteredParticipants.map((participant) => (
-            <div
-              key={participant.userId}
-              className={`p-3 rounded-lg border-2 cursor-pointer transition-colors ${
-                selectedParticipants.includes(participant.userId)
-                  ? 'bg-blue-900 border-blue-600'
-                  : 'bg-gray-700 border-gray-600 hover:bg-gray-600'
-              }`}
-              onClick={() => toggleParticipantSelection(participant.userId)}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                  selectedParticipants.includes(participant.userId)
-                    ? 'bg-blue-600 border-blue-600'
-                    : 'border-gray-400'
-                }`}>
-                  {selectedParticipants.includes(participant.userId) && (
-                    <Check className="w-3 h-3 text-white" />
-                  )}
-                </div>
-                <div>
-                  <p className="font-medium text-white">{userNames[participant.userId]}</p>
-                  <p className="text-sm text-gray-400">
-                    Se unió el {participant.joinedAt.toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="text-gray-400">Cargando participantes...</div>
             </div>
-          ))}
+          ) : filteredParticipants.length === 0 ? (
+            <div className="text-center py-8">
+              <div className="text-gray-400">No se encontraron participantes</div>
+            </div>
+          ) : (
+            filteredParticipants.map((participant) => {
+              const profile = userProfiles[participant.userId];
+              const displayName = getDisplayName(participant.userId);
+              const originalName = userNames[participant.userId];
+              const isEditing = editingName === participant.userId;
+              const hasIncompleteProfile = !originalName || originalName.startsWith('Usuario ');
+              
+              return (
+                <div
+                  key={participant.userId}
+                  className={`p-3 rounded-lg border-2 transition-colors ${
+                    selectedParticipants.includes(participant.userId)
+                      ? 'bg-blue-900 border-blue-600'
+                      : 'bg-gray-700 border-gray-600 hover:bg-gray-600'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div 
+                      className="flex items-center gap-3 flex-1 cursor-pointer"
+                      onClick={() => !isEditing && toggleParticipantSelection(participant.userId)}
+                    >
+                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                        selectedParticipants.includes(participant.userId)
+                          ? 'bg-blue-600 border-blue-600'
+                          : 'border-gray-400'
+                      }`}>
+                        {selectedParticipants.includes(participant.userId) && (
+                          <Check className="w-3 h-3 text-white" />
+                        )}
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        {/* Nombre del participante */}
+                        <div className="flex items-center gap-2">
+                          {isEditing ? (
+                            <div className="flex items-center gap-2 flex-1">
+                              <input
+                                type="text"
+                                defaultValue={displayName}
+                                className="flex-1 px-2 py-1 bg-gray-600 border border-gray-500 rounded text-white text-sm focus:outline-none focus:border-blue-500"
+                                placeholder="Nombre para el certificado"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    saveEditedName(participant.userId, e.target.value);
+                                  } else if (e.key === 'Escape') {
+                                    cancelEditingName();
+                                  }
+                                }}
+                                onBlur={(e) => saveEditedName(participant.userId, e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  cancelEditingName();
+                                }}
+                                className="text-gray-400 hover:text-white"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 flex-1">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <p className={`font-medium ${
+                                    hasIncompleteProfile ? 'text-yellow-300' : 'text-white'
+                                  }`}>
+                                    {displayName}
+                                  </p>
+                                  {customNames[participant.userId] && (
+                                    <span className="px-1.5 py-0.5 bg-green-700 text-green-200 text-xs rounded">
+                                      Editado
+                                    </span>
+                                  )}
+                                  {hasIncompleteProfile && (
+                                    <span className="px-1.5 py-0.5 bg-yellow-700 text-yellow-200 text-xs rounded">
+                                      Perfil incompleto
+                                    </span>
+                                  )}
+                                </div>
+                                
+                                {/* Email del participante */}
+                                {profile?.email && (
+                                  <p className="text-xs text-gray-400 mt-1">
+                                    📧 {profile.email}
+                                  </p>
+                                )}
+                                
+                                {/* Información adicional */}
+                                <div className="flex items-center gap-4 mt-1">
+                                  <p className="text-xs text-gray-500">
+                                    Se unió: {participant.joinedAt.toLocaleDateString()}
+                                  </p>
+                                  {profile?.itchUsername && (
+                                    <p className="text-xs text-gray-500">
+                                      itch.io: {profile.itchUsername}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  startEditingName(participant.userId);
+                                }}
+                                className="text-gray-400 hover:text-blue-300 transition-colors"
+                                title="Editar nombre para certificado"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
 
-        {/* Vista previa del texto */}
+        {/* Vista previa actualizada */}
         {selectedParticipants.length > 0 && (
-          <div className="bg-gray-700 border border-gray-600 rounded-lg p-4 mb-6">
-            <h5 className="text-white font-medium mb-3 flex items-center gap-2">
-              <Eye className="w-4 h-4" />
-              Vista Previa del Certificado:
-            </h5>
-            <div className="bg-gray-900 p-4 rounded text-gray-300 text-sm whitespace-pre-line font-mono">
-              <div className="text-center">
-                <h6 className="text-lg font-bold text-white mb-2">{certificateData.title}</h6>
-                {certificateData.subtitle && (
-                  <p className="text-blue-300 mb-4">{certificateData.subtitle}</p>
-                )}
-                <div className="text-sm">
-                  {getPreviewText()}
-                </div>
-                {certificateData.signature && (
-                  <p className="mt-4 text-green-300 italic">{certificateData.signature}</p>
-                )}
-              </div>
+          <div className="bg-gray-900 border border-gray-600 rounded-lg p-4 mb-6">
+            <h4 className="text-white font-medium mb-3">Vista Previa del Texto:</h4>
+            <div className="bg-gray-800 p-3 rounded text-gray-300 text-sm whitespace-pre-line">
+              {getPreviewText()}
             </div>
           </div>
         )}
 
-        {/* Botones finales */}
+        {/* Botones de acción */}
         <div className="flex justify-between pt-6 border-t border-gray-700">
           <button
             onClick={() => setStep(2)}
@@ -583,19 +842,23 @@ export const ManualCertificateCreator = ({ currentJam, onSuccess, onCancel }) =>
           >
             ← Editar Contenido
           </button>
-          
+
           <button
             onClick={handleCreateCertificates}
-            disabled={selectedParticipants.length === 0 || loading || 
-                     (certificateData.type === 'recognition' && selectedParticipants.length > 1 && !certificateData.gameName)}
-            className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={selectedParticipants.length === 0 || loading}
+            className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center gap-2"
           >
             {loading ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                Creando...
+              </>
             ) : (
-              <Save className="w-4 h-4" />
+              <>
+                <Save className="w-4 h-4" />
+                Crear {selectedParticipants.length} Certificado(s)
+              </>
             )}
-            Crear {selectedParticipants.length} Certificado(s)
           </button>
         </div>
       </div>
