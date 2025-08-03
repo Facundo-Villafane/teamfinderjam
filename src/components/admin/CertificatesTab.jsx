@@ -1,4 +1,4 @@
-// src/components/admin/CertificatesTab.jsx - Gestión de certificados mejorada
+// src/components/admin/CertificatesTab.jsx - Gestión de certificados corregida
 import React, { useState, useEffect } from 'react';
 import { 
   Award, 
@@ -29,6 +29,34 @@ import { generateCertificateWithCustomBackground } from '../../utils/certificate
 import { CertificatePreview } from '../certificates/CertificatePreview';
 import { ManualCertificateCreator } from './ManualCertificateCreator';
 
+/**
+ * Función helper para obtener nombre válido del usuario
+ * CORRECCIÓN: Esta función soluciona el problema de validación excesivamente estricta
+ */
+const getValidUserName = (userProfile, userId) => {
+  if (!userProfile) return `Usuario ${userId.slice(0, 8)}`;
+  
+  // Lista de prioridades para obtener el nombre
+  const nameFields = [
+    userProfile.fullName,
+    userProfile.displayName,
+    userProfile.googleDisplayName,
+    userProfile.name,
+    userProfile.firstName ? `${userProfile.firstName} ${userProfile.lastName || ''}`.trim() : null,
+    userProfile.email ? userProfile.email.split('@')[0] : null
+  ];
+  
+  // Buscar el primer campo válido
+  for (const field of nameFields) {
+    if (field && field.trim() && field.trim() !== '') {
+      return field.trim();
+    }
+  }
+  
+  // Fallback
+  return `Usuario ${userId.slice(0, 8)}`;
+};
+
 export const CertificatesTab = ({ currentJam, onRefresh }) => {
   const [certificates, setCertificates] = useState([]);
   const [stats, setStats] = useState({});
@@ -39,16 +67,16 @@ export const CertificatesTab = ({ currentJam, onRefresh }) => {
   const [selectedUser, setSelectedUser] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [participants, setParticipants] = useState([]);
-  const [userNames, setUserNames] = useState({}); // Cache de nombres de usuarios
+  const [userNames, setUserNames] = useState({});
   const [previewCertificate, setPreviewCertificate] = useState(null);
 
-  // Categorías de reconocimiento
+  // Categorías de reconocimiento disponibles
   const recognitionCategories = [
-    { id: 'originality', name: 'Originalidad', icon: '💡', color: 'bg-yellow-500' },
-    { id: 'creativity', name: 'Creatividad', icon: '✨', color: 'bg-purple-500' },
+    { id: 'originality', name: 'Originalidad', icon: '🏆', color: 'bg-yellow-500' },
+    { id: 'creativity', name: 'Creatividad', icon: '🎨', color: 'bg-pink-500' },
     { id: 'narrative', name: 'Narrativa/Concepto', icon: '📖', color: 'bg-green-500' },
-    { id: 'aesthetics', name: 'Estética/Arte', icon: '🎨', color: 'bg-pink-500' },
-    { id: 'sound', name: 'Sonido/Música', icon: '🎵', color: 'bg-indigo-500' }
+    { id: 'aesthetics', name: 'Estética/Arte', icon: '🎨', color: 'bg-purple-500' },
+    { id: 'sound', name: 'Sonido/Música', icon: '🎵', color: 'bg-blue-500' }
   ];
 
   useEffect(() => {
@@ -60,25 +88,10 @@ export const CertificatesTab = ({ currentJam, onRefresh }) => {
 
   const loadParticipants = async () => {
     if (!currentJam?.id) return;
-    
+
     try {
       const participantsData = await getJamParticipants(currentJam.id);
       setParticipants(participantsData);
-      
-      // Cargar nombres de todos los participantes
-      const namesCache = {};
-      await Promise.all(
-        participantsData.map(async (participant) => {
-          try {
-            const name = await getUserDisplayName(participant.userId);
-            namesCache[participant.userId] = name;
-          } catch (error) {
-            console.error(`Error loading name for user ${participant.userId}:`, error);
-            namesCache[participant.userId] = `Usuario ${participant.userId.slice(0, 8)}`;
-          }
-        })
-      );
-      setUserNames(namesCache);
     } catch (error) {
       console.error('Error loading participants:', error);
     }
@@ -97,25 +110,8 @@ export const CertificatesTab = ({ currentJam, onRefresh }) => {
       setCertificates(certificatesData);
       setStats(statsData);
       
-      // Cargar nombres de usuarios para certificados existentes
-      const userIds = [...new Set(certificatesData.map(cert => cert.userId))];
-      const namesCache = { ...userNames };
-      
-      await Promise.all(
-        userIds.map(async (userId) => {
-          if (!namesCache[userId]) {
-            try {
-              const name = await getUserDisplayName(userId);
-              namesCache[userId] = name;
-            } catch (error) {
-              console.error(`Error loading name for user ${userId}:`, error);
-              namesCache[userId] = `Usuario ${userId.slice(0, 8)}`;
-            }
-          }
-        })
-      );
-      
-      setUserNames(namesCache);
+      // CORRECCIÓN: Cargar nombres de usuarios de manera más robusta
+      await loadUserNames(certificatesData);
     } catch (error) {
       console.error('Error loading certificates data:', error);
     } finally {
@@ -123,8 +119,34 @@ export const CertificatesTab = ({ currentJam, onRefresh }) => {
     }
   };
 
+  /**
+   * CORRECCIÓN: Función para cargar nombres de usuarios más robusta
+   */
+  const loadUserNames = async (certificatesData = certificates) => {
+    try {
+      const names = {};
+      const uniqueUserIds = [...new Set(certificatesData.map(cert => cert.userId))];
+      
+      // Cargar nombres en paralelo
+      const namePromises = uniqueUserIds.map(async (userId) => {
+        try {
+          const userProfile = await getUserProfile(userId);
+          names[userId] = getValidUserName(userProfile, userId);
+        } catch (error) {
+          console.error(`Error loading name for user ${userId}:`, error);
+          names[userId] = `Usuario ${userId.slice(0, 8)}`;
+        }
+      });
+      
+      await Promise.all(namePromises);
+      setUserNames(names);
+    } catch (error) {
+      console.error('Error loading user names:', error);
+    }
+  };
+
   const getUserName = (userId) => {
-    return userNames[userId] || `Usuario ${userId.slice(0, 8)}`;
+    return userNames[userId] || `Usuario ${userId.slice(0, 8)}...`;
   };
 
   const getCategoryName = (category) => {
@@ -198,49 +220,79 @@ export const CertificatesTab = ({ currentJam, onRefresh }) => {
     }
   };
 
-  const handlePreviewCertificate = (certificate) => {
-    setPreviewCertificate(certificate);
+  const handlePreviewCertificate = async (certificate) => {
+    try {
+      // Obtener información del usuario para la preview
+      const userProfile = await getUserProfile(certificate.userId);
+      const validUserName = getValidUserName(userProfile, certificate.userId);
+      
+      // Crear certificado temporal con nombre válido para preview
+      const previewData = {
+        ...certificate,
+        previewUserName: validUserName || 'Participante'
+      };
+      
+      setPreviewCertificate(previewData);
+    } catch (error) {
+      console.error('Error loading user for preview:', error);
+      // Fallback: mostrar preview con nombre genérico
+      setPreviewCertificate({
+        ...certificate,
+        previewUserName: 'Participante'
+      });
+    }
   };
 
   /**
- * Función corregida para descargar certificados desde admin
- */
+   * CORRECCIÓN: Función corregida para descargar certificados desde admin
+   * Esta función elimina la validación excesivamente estricta que causaba el error
+   */
   const handleDownloadCertificate = async (certificate) => {
     try {
-      // Obtener información completa del usuario
+      // Obtener información del usuario
       const userProfile = await getUserProfile(certificate.userId);
       
-      if (!userProfile || !userProfile.fullName) {
-        alert('El usuario debe completar su perfil para generar certificados válidos');
-        return;
-      }
-  
-      // CORRECCIÓN: Usar fecha correctamente
+      // CORRECCIÓN: Usar función helper más flexible en lugar de validación estricta
+      const validUserName = getValidUserName(userProfile, certificate.userId);
+      
+      // Manejar fecha correctamente
       let certificateDate;
       if (certificate.awardedDate) {
-        // Si es un Timestamp de Firestore
-        certificateDate = certificate.awardedDate.toDate ? certificate.awardedDate.toDate() : new Date(certificate.awardedDate);
+        if (certificate.awardedDate.toDate && typeof certificate.awardedDate.toDate === 'function') {
+          certificateDate = certificate.awardedDate.toDate();
+        } else if (certificate.awardedDate instanceof Date) {
+          certificateDate = certificate.awardedDate;
+        } else if (typeof certificate.awardedDate === 'string') {
+          certificateDate = new Date(certificate.awardedDate);
+        } else if (typeof certificate.awardedDate === 'number') {
+          certificateDate = new Date(certificate.awardedDate);
+        } else if (certificate.awardedDate.seconds) {
+          certificateDate = new Date(certificate.awardedDate.seconds * 1000);
+        } else {
+          certificateDate = new Date();
+        }
       } else {
         certificateDate = new Date();
       }
-  
+
       const certificateData = {
-        userName: userProfile.fullName,
+        userName: validUserName, // Usar el nombre obtenido con la función helper
         jamName: certificate.jamName,
-        category: certificate.category, // Mantener categoría original
-        isWinner: certificate.isWinner, // Mantener valor original
+        category: certificate.category,
+        isWinner: certificate.isWinner,
         date: certificateDate,
         certificateId: certificate.id,
         gameName: certificate.gameName || null,
-        // Campos personalizados del Manual Certificate Creator
+        gameLink: certificate.gameLink || null,
+        // Campos personalizados
         customTitle: certificate.customTitle || null,
         customSubtitle: certificate.customSubtitle || null,
         customMainText: certificate.customMainText || null,
         customSignature: certificate.customSignature || null
       };
-  
-      console.log('Admin download certificate data:', certificateData); // Para debug
-  
+
+      console.log('Admin download certificate data:', certificateData);
+
       await generateCertificateWithCustomBackground(certificateData);
     } catch (error) {
       console.error('Error generating certificate:', error);
@@ -308,7 +360,7 @@ export const CertificatesTab = ({ currentJam, onRefresh }) => {
                 <p className="text-sm text-gray-300">Participación</p>
                 <p className="text-2xl font-bold text-white">{stats.participationCertificates || 0}</p>
               </div>
-              <Award className="w-8 h-8 text-green-400" />
+              <Users className="w-8 h-8 text-green-400" />
             </div>
           </div>
           
@@ -324,41 +376,16 @@ export const CertificatesTab = ({ currentJam, onRefresh }) => {
         </div>
       </div>
 
-      {/* Información sobre certificados */}
-      <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
-        <h4 className="font-semibold text-white mb-4">Tipos de Certificados</h4>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <h5 className="font-medium text-white mb-2">Certificados de Participación</h5>
-            <ul className="text-sm text-gray-300 space-y-1">
-              <li>• Se otorgan automáticamente a todos los participantes</li>
-              <li>• Reconocen la participación activa en la jam</li>
-              <li>• Válidos para portafolios profesionales</li>
-              <li>• Descargables en formato PDF profesional</li>
-            </ul>
-          </div>
-          
-          <div>
-            <h5 className="font-medium text-white mb-2">Certificados de Reconocimiento</h5>
-            <ul className="text-sm text-gray-300 space-y-1">
-              <li>• Para participantes destacados en categorías específicas</li>
-              <li>• Basados en votaciones de la comunidad</li>
-              <li>• Incluyen categoría específica del reconocimiento</li>
-              <li>• Diseño especial con elementos dorados</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      {/* Estadísticas por categoría */}
-      {Object.keys(stats.categoriesStats || {}).length > 0 && (
+      {/* Estadísticas por categoría de reconocimiento */}
+      {stats.categoriesStats && Object.keys(stats.categoriesStats).length > 0 && (
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
-          <h4 className="font-semibold text-white mb-4">Reconocimientos por Categoría</h4>
-          
+          <h4 className="font-semibold text-white mb-4 flex items-center gap-2">
+            <BarChart3 className="w-5 h-5" />
+            Reconocimientos por Categoría
+          </h4>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             {recognitionCategories.map((category) => {
-              const count = stats.categoriesStats?.[category.id] || 0;
+              const count = stats.categoriesStats[category.id] || 0;
               
               return (
                 <div key={category.id} className="text-center">
@@ -453,7 +480,7 @@ export const CertificatesTab = ({ currentJam, onRefresh }) => {
       {/* Creador manual de certificados */}
       {showAdvancedCreator && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="w-full max-w-4xl">
+          <div className="w-full max-w-4xl max-h-[90vh] overflow-auto">
             <ManualCertificateCreator
               currentJam={currentJam}
               onSuccess={() => {
@@ -466,15 +493,23 @@ export const CertificatesTab = ({ currentJam, onRefresh }) => {
         </div>
       )}
 
-      {/* Modal para crear reconocimiento (método anterior - mantener como backup) */}
+      {/* Modal para crear reconocimiento individual */}
       {showCreateRecognition && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold mb-4">Crear Certificado de Reconocimiento</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold text-white">Crear Certificado de Reconocimiento</h3>
+              <button
+                onClick={() => setShowCreateRecognition(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
                   Participante
                 </label>
                 <select
@@ -485,14 +520,14 @@ export const CertificatesTab = ({ currentJam, onRefresh }) => {
                   <option value="">Seleccionar participante...</option>
                   {participants.map((participant) => (
                     <option key={participant.userId} value={participant.userId}>
-                      {getUserName(participant.userId)}
+                      {participant.userName || participant.userId}
                     </option>
                   ))}
                 </select>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
                   Categoría
                 </label>
                 <select
@@ -536,9 +571,9 @@ export const CertificatesTab = ({ currentJam, onRefresh }) => {
       {previewCertificate && (
         <CertificatePreview
           certificate={previewCertificate}
-          userName={getUserName(previewCertificate.userId)}
+          userName={previewCertificate.previewUserName || getUserName(previewCertificate.userId)}
           onClose={() => setPreviewCertificate(null)}
-          onDownload={handleDownloadCertificate}
+          onDownload={() => handleDownloadCertificate(previewCertificate)}
         />
       )}
     </div>
