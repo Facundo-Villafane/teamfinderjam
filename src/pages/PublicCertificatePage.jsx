@@ -40,10 +40,19 @@ const PublicCertificatePage = () => {
       const certificateType = certificate.isWinner ? 'Reconocimiento' : 'Participación';
       
       // Título de la página
-      document.title = `Certificado de ${certificateType} - ${certificate.jamName}`;
+      const pageTitle = `Certificado de ${certificateType} - ${certificate.jamName}`;
+      document.title = pageTitle;
       
       // Metadescripción
-      const description = `Certificado oficial de ${certificateType}${certificate.isWinner ? ` - ${categoryName}` : ''} emitido para la Game Jam "${certificate.jamName}"${certificate.gameName ? ` por el juego "${certificate.gameName}"` : ''}`;
+      const description = `Certificado oficial de ${certificateType}${certificate.isWinner ? ` - ${categoryName}` : ''} emitido para la Game Jam "${certificate.jamName}"${certificate.gameName ? ` por el juego "${certificate.gameName}"` : ''}. Verificable y compartible.`;
+      
+      // Participantes info para descripción
+      let participantsInfo = '';
+      if (certificate.participants && certificate.participants.length > 1) {
+        participantsInfo = ` Equipo: ${certificate.participants.map(p => p.name).join(', ')}.`;
+      }
+      
+      const fullDescription = description + participantsInfo;
       
       let metaDescription = document.querySelector('meta[name="description"]');
       if (!metaDescription) {
@@ -51,7 +60,7 @@ const PublicCertificatePage = () => {
         metaDescription.name = 'description';
         document.head.appendChild(metaDescription);
       }
-      metaDescription.content = description;
+      metaDescription.content = fullDescription;
 
       // Open Graph tags
       const setMetaTag = (property, content) => {
@@ -64,10 +73,39 @@ const PublicCertificatePage = () => {
         meta.content = content;
       };
 
-      setMetaTag('og:title', `Certificado de ${certificateType} - Game Jam UTN`);
-      setMetaTag('og:description', description);
-      setMetaTag('og:type', 'website');
+      // LinkedIn requiere estos metadatos específicos
+      setMetaTag('og:title', pageTitle);
+      setMetaTag('og:description', fullDescription);
+      setMetaTag('og:type', 'article'); // LinkedIn prefiere 'article' para contenido específico
       setMetaTag('og:url', window.location.href);
+      setMetaTag('og:site_name', 'Game Jam Team Finder');
+      setMetaTag('og:locale', 'es_ES');
+      
+      // Imagen para LinkedIn (usando una imagen por defecto)
+      const imageUrl = `${window.location.origin}/og-image.png`;
+      setMetaTag('og:image', imageUrl);
+      setMetaTag('og:image:width', '1200');
+      setMetaTag('og:image:height', '630');
+      setMetaTag('og:image:type', 'image/png');
+      
+      // Tags adicionales para LinkedIn
+      setMetaTag('og:image:alt', `Certificado de ${certificateType} - ${certificate.jamName}`);
+      
+      // Twitter Card tags (LinkedIn también los lee)
+      const setTwitterTag = (name, content) => {
+        let meta = document.querySelector(`meta[name="${name}"]`);
+        if (!meta) {
+          meta = document.createElement('meta');
+          meta.setAttribute('name', name);
+          document.head.appendChild(meta);
+        }
+        meta.content = content;
+      };
+      
+      setTwitterTag('twitter:card', 'summary_large_image');
+      setTwitterTag('twitter:title', pageTitle);
+      setTwitterTag('twitter:description', fullDescription);
+      setTwitterTag('twitter:image', imageUrl);
     }
 
     // Cleanup al desmontar
