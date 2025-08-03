@@ -23,7 +23,7 @@ import {
   createRecognitionCertificate,
   deleteCertificate
 } from '../../firebase/certificates';
-import { getUserDisplayName, getUserProfile } from '../../firebase/users';
+import { getUserProfile } from '../../firebase/users';
 import { getJamParticipants } from '../../firebase/participants';
 import { generateCertificateWithCustomBackground } from '../../utils/certificateGenerator';
 import { CertificatePreview } from '../certificates/CertificatePreview';
@@ -84,7 +84,7 @@ export const CertificatesTab = ({ currentJam, onRefresh }) => {
       loadCertificatesData();
       loadParticipants();
     }
-  }, [currentJam?.id]);
+  }, [currentJam?.id]); // loadCertificatesData and loadParticipants intentionally excluded to avoid infinite re-renders
 
   const loadParticipants = async () => {
     if (!currentJam?.id) return;

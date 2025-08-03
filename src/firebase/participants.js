@@ -9,8 +9,8 @@ import {
     query, 
     where,
     orderBy,
-    serverTimestamp,
-    updateDoc
+    serverTimestamp
+    // Removed unused import: updateDoc
   } from 'firebase/firestore';
   import { db } from './config';
   

@@ -34,13 +34,11 @@ export const usePostForm = () => {
   };
 
   const handleFieldChange = (field, value) => {
-    const post = editingPost || newPost;
     const setPost = editingPost ? setEditingPost : setNewPost;
     setPost(prev => ({ ...prev, [field]: value }));
   };
 
   const handleSkillToggle = (skill, field) => {
-    const post = editingPost || newPost;
     const setPost = editingPost ? setEditingPost : setNewPost;
     
     setPost(prev => ({
@@ -52,7 +50,6 @@ export const usePostForm = () => {
   };
 
   const handleToolToggle = (tool) => {
-    const post = editingPost || newPost;
     const setPost = editingPost ? setEditingPost : setNewPost;
     
     setPost(prev => ({

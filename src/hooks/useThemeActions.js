@@ -1,5 +1,5 @@
 // src/hooks/useThemeActions.js - Hook corregido
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   createTheme,
   updateTheme,
@@ -10,7 +10,7 @@ import {
   selectWinnerTheme
 } from '../firebase/themes';
 
-export const useThemeActions = (user) => {
+export const useThemeActions = () => {
   const [themes, setThemes] = useState([]);
   const [votingResults, setVotingResults] = useState({});
   const [editingTheme, setEditingTheme] = useState(null);

@@ -1,5 +1,5 @@
 // src/components/admin/AdvancedCertificateCreator.jsx - Creador avanzado de certificados
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Award, 
   Trophy, 
@@ -48,9 +48,9 @@ export const AdvancedCertificateCreator = ({ currentJam, onSuccess, onCancel }) 
     if (currentJam?.id && step === 2) {
       loadData();
     }
-  }, [currentJam?.id, step]);
+  }, [currentJam?.id, step, loadData]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!currentJam?.id) return;
     
     setLoading(true);
@@ -77,7 +77,7 @@ export const AdvancedCertificateCreator = ({ currentJam, onSuccess, onCancel }) 
           try {
             const name = await getUserDisplayName(userId);
             names[userId] = name;
-          } catch (error) {
+          } catch {
             names[userId] = `Usuario ${userId.slice(0, 8)}`;
           }
         })
@@ -88,7 +88,7 @@ export const AdvancedCertificateCreator = ({ currentJam, onSuccess, onCancel }) 
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentJam?.id]);
 
   const handleTypeSelection = (type) => {
     setCertificateType(type);

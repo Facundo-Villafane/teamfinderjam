@@ -1,29 +1,4 @@
-// src/utils/certificateGenerator.js - Versión restaurada con diseño elegante + QR robusto + múltiples participantes
-import { jsPDF } from 'jspdf';
-
-// Importación condicional de QRCode para evitar errores
-let QRCode = null;
-try {
-  QRCode = await import('qrcode');
-  QRCode = QRCode.default || QRCode;
-} catch (error) {
-  console.warn('QRCode library not available - QR codes will be skipped');
-}
-
-/**
- * Carga QRCode dinámicamente para evitar errores de importación
- */
-const loadQRCode = async () => {
-  if (QRCode) return QRCode;
-  
-  try {
-    const qrModule = await import('qrcode');
-    QRCode = qrModule.default || qrModule;
-    return QRCode;
-  } catch (error) {
-    console.warn('Could not load QRCode library:', error);
-    return null;
-  }// src/utils/certificateGenerator.js - Versión restaurada con diseño elegante + QR + múltiples participantes
+// src/utils/certificateGenerator.js - Versión restaurada con diseño elegante + QR + múltiples participantes
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
 
@@ -109,8 +84,8 @@ const isRecognitionCertificate = (certificateData) => {
 /**
  * Carga y agrega el logo en la esquina superior derecha
  */
-const loadAndAddLogo = async (pdf, logoUrl, pageWidth, pageHeight) => {
-  return new Promise((resolve, reject) => {
+const loadAndAddLogo = async (pdf, logoUrl, pageWidth) => {
+  return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     
@@ -359,7 +334,7 @@ const addRecognitionCertificateText = (pdf, certificateData, pageWidth, pageHeig
     
     yPosition += 12;
     
-    certificateData.participants.forEach((participant, index) => {
+    certificateData.participants.forEach((participant) => {
       pdf.setFontSize(16);
       pdf.setFont('helvetica', 'bold');
       pdf.setTextColor(146, 248, 207);
@@ -375,7 +350,7 @@ const addRecognitionCertificateText = (pdf, certificateData, pageWidth, pageHeig
   pdf.setTextColor(190, 190, 190);
   pdf.setFont('helvetica', 'normal');
   
-  categoryInfo.description.forEach((line, index) => {
+  categoryInfo.description.forEach((line) => {
     if (line === '') {
       yPosition += 5;
       return;
@@ -457,7 +432,7 @@ const addParticipationCertificateText = (pdf, certificateData, pageWidth, pageHe
   
   if (certificateData.participants && certificateData.participants.length > 1) {
     // Múltiples participantes
-    certificateData.participants.forEach((participant, index) => {
+    certificateData.participants.forEach((participant) => {
       const participantNameSize = 24; // Más pequeño para múltiples nombres
       pdf.setFontSize(participantNameSize);
       pdf.setFont('helvetica', 'bold');
@@ -742,7 +717,7 @@ export const generateCertificatePDF = async (certificateData, backgroundImageUrl
     if (backgroundImageUrl) {
       try {
         await loadBackgroundImage(pdf, backgroundImageUrl, pageWidth, pageHeight);
-      } catch (error) {
+      } catch {
         console.warn('Could not load background image, using fallback');
         createFallbackBackground(pdf, pageWidth, pageHeight, certificateData.isWinner);
       }

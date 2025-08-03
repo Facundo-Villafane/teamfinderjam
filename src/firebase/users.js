@@ -8,8 +8,8 @@ import {
   setDoc, 
   query, 
   where, 
-  orderBy, 
-  limit 
+  orderBy
+  // Removed unused import: limit 
 } from 'firebase/firestore';
 import { auth, db } from './config';
 import { safeToDate } from '../utils/dateUtils';

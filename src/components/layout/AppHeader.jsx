@@ -19,7 +19,7 @@ const getPageTitle = (path) => {
   }
 }
 
-export const AppHeader = ({ user, isAdmin, onMenuToggle, currentPath }) => {
+export const AppHeader = ({ user, onMenuToggle, currentPath }) => {
   const { handleSignIn } = useAuth()
   
   return (

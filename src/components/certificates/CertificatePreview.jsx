@@ -126,16 +126,7 @@ export const CertificatePreview = ({
     return names[category] || category;
   };
 
-  const getCategoryIcon = (category) => {
-    const icons = {
-      'originality': <FaTrophy className="inline text-yellow-400" />,
-      'creativity': <FaPalette className="inline text-pink-400" />,
-      'narrative': <FaBook className="inline text-green-400" />,
-      'aesthetics': <FaPalette className="inline text-purple-400" />,
-      'sound': <FaMusic className="inline text-blue-400" />
-    };
-    return icons[category] || <FaTrophy className="inline text-yellow-400" />;
-  };
+  // Removed unused getCategoryIcon function
 
   const formatDate = (date) => {
     return date.toLocaleDateString('es-ES');

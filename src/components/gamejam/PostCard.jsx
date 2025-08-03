@@ -21,9 +21,10 @@ const createContactLink = (type, info) => {
   if (info.includes('http')) return info;
   
   switch(type) {
-    case 'whatsapp':
+    case 'whatsapp': {
       const phoneNumber = info.replace(/[^\d+]/g, '');
       return `https://wa.me/${phoneNumber}`;
+    }
     case 'telegram':
       if (info.startsWith('@')) {
         return `https://t.me/${info.substring(1)}`;

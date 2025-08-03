@@ -22,10 +22,10 @@ export const generateCertificatePDF = async ({
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
     
-    // Colores
-    const primaryColor = '#0fc064';
-    const secondaryColor = '#1a1a2e';
-    const goldColor = '#FFD700';
+    // Colors defined but used in drawing operations below
+    // const primaryColor = '#0fc064';
+    // const secondaryColor = '#1a1a2e';
+    // const goldColor = '#FFD700';
     
     // Configurar fuentes
     pdf.setFont('helvetica');

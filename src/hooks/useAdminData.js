@@ -3,18 +3,11 @@ import { useState, useEffect } from 'react';
 import {
   getAllJams,
   getAllPosts,
-  getAdminStats,
-  createJam,
-  updateJam,
-  deleteJam,
-  setActiveJam,
-  deletePostAsAdmin,
-  togglePostFeatured,
-  togglePostFlagged,
-  logAdminAction
+  getAdminStats
+  // Removed unused imports: createJam, updateJam, deleteJam, setActiveJam, deletePostAsAdmin, togglePostFeatured, togglePostFlagged, logAdminAction
 } from '../firebase/admin';
 
-export const useAdminData = (user) => {
+export const useAdminData = () => {
   const [jams, setJams] = useState([]);
   const [stats, setStats] = useState({});
   const [posts, setPosts] = useState([]);

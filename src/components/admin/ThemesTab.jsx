@@ -1,5 +1,5 @@
 // src/components/admin/ThemesTab.jsx - Versión corregida con validaciones
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Plus, Edit3, Trash2, Vote, Trophy, Lock, Unlock, BarChart3, Calendar, Users, Star, Info } from 'lucide-react';
 
 export const ThemesTab = ({ 

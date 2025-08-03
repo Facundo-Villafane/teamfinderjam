@@ -13,7 +13,7 @@ export const JamBanner = ({ jam, user, onSignIn }) => {
     participationStats,
     handleJoinJam: originalHandleJoinJam,
     handleLeaveJam,
-    getRestrictionMessage
+    // getRestrictionMessage - unused
   } = useJamParticipation(user, jam);
 
   // Wrapper para manejar el join y notificar a otros componentes
@@ -38,18 +38,13 @@ export const JamBanner = ({ jam, user, onSignIn }) => {
 
   if (!jam) return null;
 
-  const isActive = jam.active;
-  const today = new Date();
-  const startDate = new Date(jam.startDate);
-  const endDate = new Date(jam.endDate);
+  // const isActive = jam.active; // unused
+  // Date calculations removed as unused
+  // const today = new Date();
+  // const startDate = new Date(jam.startDate);
+  // const endDate = new Date(jam.endDate);
   
-  // Calcular estado de la jam
-  let jamStatus = 'upcoming';
-  if (today >= startDate && today <= endDate) {
-    jamStatus = 'active';
-  } else if (today > endDate) {
-    jamStatus = 'ended';
-  }
+  // Jam status calculation removed as unused
 
   const getStatusInfo = () => {
     const now = currentTime; // Usar el estado actualizado

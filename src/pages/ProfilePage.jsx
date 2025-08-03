@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { getPostsByUser } from '../firebase/firestore';
 import { getUserJamHistory } from '../firebase/participants';
-import { isUserJoined } from '../firebase/participants';
+// Removed unused import: isUserJoined
 import { getUserCertificates } from '../firebase/certificates';
 import { isProfileCompleteForCertificates, getUserProfile } from '../firebase/users';
 import { ProfileEditor } from '../components/profile/ProfileEditor';
@@ -32,15 +32,13 @@ const ProfilePage = ({ user }) => {
   const [userCertificates, setUserCertificates] = useState([]);
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
-  const [currentJam, setCurrentJam] = useState(null);
-  const [isJoinedCurrentJam, setIsJoinedCurrentJam] = useState(false);
+  // Removed unused state: currentJam, isJoinedCurrentJam
   const [showEditor, setShowEditor] = useState(false);
   const [profileComplete, setProfileComplete] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [previewCertificate, setPreviewCertificate] = useState(null);
   
-  const adminEmails = ['facundo.tnd@gmail.com', 'admin@example.com'];
-  const isAdmin = user && adminEmails.includes(user.email);
+  // Removed unused admin check
 
   useEffect(() => {
     if (user) {
@@ -106,7 +104,7 @@ const ProfilePage = ({ user }) => {
         return date.toLocaleDateString('es-ES');
       }
       return new Date(date).toLocaleDateString('es-ES');
-    } catch (error) {
+    } catch {
       return 'Fecha no válida';
     }
   };

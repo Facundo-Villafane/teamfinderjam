@@ -1,6 +1,7 @@
 // src/scripts/fixDates.js - Script para arreglar fechas en producción
 
-import { collection, getDocs, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, doc, writeBatch } from 'firebase/firestore';
+// Removed unused import: updateDoc
 import { db } from '../firebase/config';
 
 /**
