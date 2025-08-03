@@ -758,20 +758,25 @@ export const generateCertificateWithCustomBackground = async (certificateData) =
 };
 
 /**
- * Función helper para preparar datos de certificado con soporte para múltiples participantes
+ * Función helper para preparar datos de certificado con soporte para equipos
  */
 export const prepareCertificateData = (certificate, userProfile, additionalParticipants = []) => {
-  // Preparar lista de participantes
+  // CORRECCIÓN: Manejar participantes del equipo desde el certificado guardado
   let participants = [];
   
-  if (additionalParticipants && additionalParticipants.length > 0) {
-    // Si hay participantes adicionales, incluir al usuario principal también
+  // Prioridad 1: Usar participantes guardados en el certificado (para equipos)
+  if (certificate.participants && certificate.participants.length > 0) {
+    participants = certificate.participants;
+  }
+  // Prioridad 2: Usar participantes adicionales pasados como parámetro
+  else if (additionalParticipants && additionalParticipants.length > 0) {
     participants = [
       { name: userProfile?.fullName || 'Participante', userId: userProfile?.uid },
       ...additionalParticipants.map(p => ({ name: p.name, userId: p.userId }))
     ];
-  } else if (userProfile?.fullName) {
-    // Solo el usuario principal
+  }
+  // Prioridad 3: Solo el usuario principal
+  else if (userProfile?.fullName) {
     participants = [{ name: userProfile.fullName, userId: userProfile.uid }];
   }
 
@@ -785,7 +790,9 @@ export const prepareCertificateData = (certificate, userProfile, additionalParti
     gameName: certificate.gameName || null,
     gameLink: certificate.gameLink || null,
     theme: certificate.theme || null,
-    participants: participants,
+    participants: participants, // Array con todos los participantes del equipo
+    isTeamCertificate: certificate.isTeamCertificate || false,
+    recipientUserId: certificate.recipientUserId || certificate.userId,
     // Campos personalizados
     customTitle: certificate.customTitle || null,
     customSubtitle: certificate.customSubtitle || null,

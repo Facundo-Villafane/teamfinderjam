@@ -275,8 +275,9 @@ export const CertificatesTab = ({ currentJam, onRefresh }) => {
         certificateDate = new Date();
       }
 
+      // NUEVO: Usar la función prepareCertificateData que maneja equipos correctamente
       const certificateData = {
-        userName: validUserName, // Usar el nombre obtenido con la función helper
+        userName: validUserName,
         jamName: certificate.jamName,
         category: certificate.category,
         isWinner: certificate.isWinner,
@@ -284,6 +285,12 @@ export const CertificatesTab = ({ currentJam, onRefresh }) => {
         certificateId: certificate.id,
         gameName: certificate.gameName || null,
         gameLink: certificate.gameLink || null,
+        
+        // CORRECCIÓN: Incluir información del equipo si existe
+        participants: certificate.participants || null,
+        isTeamCertificate: certificate.isTeamCertificate || false,
+        recipientUserId: certificate.recipientUserId || certificate.userId,
+        
         // Campos personalizados
         customTitle: certificate.customTitle || null,
         customSubtitle: certificate.customSubtitle || null,

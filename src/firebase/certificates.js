@@ -1,4 +1,4 @@
-// src/firebase/certificates.js - Gestión de certificados con manejo robusto de fechas
+// src/firebase/certificates.js - Gestión de certificados con manejo robusto de fechas y equipos
 
 import { 
   collection, 
@@ -8,15 +8,18 @@ import {
   addDoc, 
   updateDoc,
   deleteDoc,
+  setDoc,
   query, 
   where, 
   orderBy,
-  writeBatch 
+  writeBatch,
+  serverTimestamp
 } from 'firebase/firestore';
 import { db } from './config';
 import { safeToDate } from '../utils/dateUtils';
 
 const CERTIFICATES_COLLECTION = 'certificates';
+const JAMS_COLLECTION = 'jams'; // Asegurar que tenemos esta constante
 
 /**
  * Crea un nuevo certificado
@@ -385,68 +388,62 @@ export const userHasCertificate = async (userId, jamId, category) => {
 };
 
 /**
- * Función para crear certificados personalizados con campos customizables
- * @param {string} userId - ID del usuario
+ * NUEVA FUNCIÓN: Crea un certificado personalizado con soporte para equipos
+ * @param {string} userId - ID del usuario destinatario
  * @param {string} jamId - ID de la jam
- * @param {object} certificateData - Datos del certificado personalizado
- * @returns {Promise<string>} ID del certificado creado
+ * @param {object} certificateData - Datos del certificado
  */
 export const createCustomCertificate = async (userId, jamId, certificateData) => {
   try {
     // Obtener datos de la jam
-    const jamRef = doc(db, 'jams', jamId);
-    const jamDoc = await getDoc(jamRef);
-    
+    const jamDoc = await getDoc(doc(db, JAMS_COLLECTION, jamId));
     if (!jamDoc.exists()) {
       throw new Error('Jam not found');
     }
     
     const jamData = jamDoc.data();
-
-    // Determinar correctamente si es certificado de reconocimiento
-    const isRecognitionCert = certificateData.isWinner === true || 
-                             certificateData.type === 'recognition' ||
-                             (certificateData.category && 
-                              certificateData.category !== 'participation' && 
-                              certificateData.category !== 'Participación');
-
-    console.log('Creating custom certificate:', {
-      userId,
-      category: certificateData.category,
-      isWinner: isRecognitionCert,
-      type: certificateData.type,
-      gameName: certificateData.gameName,
-      gameLink: certificateData.gameLink
-    });
-
-    // Crear certificado con todos los datos personalizados
-    const certificateWithData = {
+    
+    // Preparar datos del certificado
+    const certificateRef = doc(collection(db, CERTIFICATES_COLLECTION));
+    
+    const newCertificate = {
       userId,
       jamId,
       jamName: jamData.name,
-      category: certificateData.category || 'participation',
-      isWinner: isRecognitionCert,
+      category: certificateData.category || (certificateData.isWinner ? 'recognition' : 'participation'),
+      isWinner: certificateData.isWinner || false,
       
       // Campos personalizados del Manual Certificate Creator
       customTitle: certificateData.title || null,
-      customSubtitle: certificateData.subtitle || null, 
+      customSubtitle: certificateData.subtitle || null,
       customMainText: certificateData.mainText || null,
       customSignature: certificateData.signature || null,
       
-      // Campos para reconocimientos
+      // Información del juego (para reconocimientos)
       gameName: certificateData.gameName || null,
       gameLink: certificateData.gameLink || null,
-      gameDescription: certificateData.gameDescription || null,
-      postId: certificateData.postId || null,
       
-      // Timestamps
-      awardedDate: new Date(),
-      createdAt: new Date(),
-      updatedAt: new Date()
+      // NUEVO: Información del equipo
+      participants: certificateData.participants || null, // Array con todos los miembros del equipo
+      isTeamCertificate: certificateData.isTeamCertificate || false, // Flag para indicar certificado de equipo
+      recipientUserId: certificateData.recipientUserId || userId, // Usuario específico que recibe este certificado
+      
+      // Metadatos
+      awardedDate: serverTimestamp(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
     };
 
-    const docRef = await addDoc(collection(db, CERTIFICATES_COLLECTION), certificateWithData);
-    return docRef.id;
+    await setDoc(certificateRef, newCertificate);
+    
+    console.log('Custom certificate created:', {
+      certificateId: certificateRef.id,
+      userId,
+      isTeam: certificateData.isTeamCertificate,
+      participantsCount: certificateData.participants?.length || 1
+    });
+
+    return certificateRef.id;
   } catch (error) {
     console.error('Error creating custom certificate:', error);
     throw error;
@@ -473,6 +470,80 @@ export const createRecognitionCertificate = async (userId, jamId, category, addi
     return await createCustomCertificate(userId, jamId, recognitionData);
   } catch (error) {
     console.error('Error creating recognition certificate:', error);
+    throw error;
+  }
+};
+
+/**
+ * FUNCIÓN CORREGIDA: Crea certificados de participación masivos mejorada
+ * Para uso desde el admin con participantes de Firebase
+ */
+export const createMassParticipationCertificatesFromFirebase = async (jamId) => {
+  try {
+    // Obtener participantes de Firebase
+    const participantsQuery = query(
+      collection(db, 'participants'),
+      where('jamId', '==', jamId),
+      where('isActive', '==', true)
+    );
+    
+    const participantsSnapshot = await getDocs(participantsQuery);
+    
+    if (participantsSnapshot.empty) {
+      throw new Error('No participants found for this jam');
+    }
+
+    // Obtener datos de la jam
+    const jamDoc = await getDoc(doc(db, JAMS_COLLECTION, jamId));
+    if (!jamDoc.exists()) {
+      throw new Error('Jam not found');
+    }
+    
+    const jamData = jamDoc.data();
+    
+    // Obtener certificados existentes
+    const existingCertificates = await getJamCertificates(jamId);
+    const existingUserIds = new Set(
+      existingCertificates
+        .filter(cert => cert.category === 'participation')
+        .map(cert => cert.userId)
+    );
+
+    const batch = writeBatch(db);
+    let createdCount = 0;
+
+    // Crear certificados para participantes que no los tienen
+    participantsSnapshot.forEach((participantDoc) => {
+      const participantData = participantDoc.data();
+      
+      if (!existingUserIds.has(participantData.userId)) {
+        const certificateRef = doc(collection(db, CERTIFICATES_COLLECTION));
+        batch.set(certificateRef, {
+          userId: participantData.userId,
+          jamId,
+          jamName: jamData.name,
+          category: 'participation',
+          isWinner: false,
+          awardedDate: serverTimestamp(),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        
+        createdCount++;
+      }
+    });
+
+    if (createdCount > 0) {
+      await batch.commit();
+    }
+
+    return {
+      totalParticipants: participantsSnapshot.size,
+      certificatesCreated: createdCount,
+      message: `Se crearon ${createdCount} certificados de participación de ${participantsSnapshot.size} participantes`
+    };
+  } catch (error) {
+    console.error('Error creating mass participation certificates:', error);
     throw error;
   }
 };

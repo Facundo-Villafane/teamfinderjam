@@ -211,7 +211,9 @@ export const CertificatePreview = ({
         {/* 5. MÚLTIPLES PARTICIPANTES (si los hay) */}
         {certificate.participants && certificate.participants.length > 1 && (
           <div className="text-center mb-6">
-            <p className="text-sm text-gray-300 mb-2">Equipo:</p>
+            <p className="text-sm text-gray-300 mb-2">
+              {certificate.isTeamCertificate ? 'Equipo:' : 'Participantes:'}
+            </p>
             <div className="space-y-1">
               {certificate.participants.map((participant, index) => (
                 <h4 key={index} className="text-lg font-bold drop-shadow" 
@@ -220,6 +222,18 @@ export const CertificatePreview = ({
                 </h4>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* CASO ESPECIAL: Si es certificado de equipo pero userName no está en la lista */}
+        {certificate.isTeamCertificate && certificate.participants && 
+         !certificate.participants.some(p => p.name === userName) && (
+          <div className="text-center mb-6">
+            <p className="text-sm text-gray-300 mb-2">Destinatario:</p>
+            <h4 className="text-lg font-bold drop-shadow" 
+                style={{ color: '#ff759f' }}>
+              {userName}
+            </h4>
           </div>
         )}
 
