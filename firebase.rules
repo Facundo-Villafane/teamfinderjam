@@ -1,0 +1,226 @@
+// Firestore Security Rules - Con certificados, usuarios y permisos de admin corregidos
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Posts collection
+    match /posts/{postId} {
+      // Cualquiera puede leer posts
+      allow read: if true;
+      
+      // Solo usuarios autenticados pueden crear posts
+      allow create: if request.auth != null 
+        && request.auth.uid == request.resource.data.userId
+        && validatePostData();
+      
+      // Solo el dueño puede actualizar/eliminar su post, o un admin
+      allow update, delete: if request.auth != null 
+        && (request.auth.uid == resource.data.userId || isAdmin());
+    }
+    
+    // Jams collection - solo admins pueden modificar
+    match /jams/{jamId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null && isAdmin();
+    }
+    
+    // Themes collection - todos pueden leer, solo admins pueden modificar
+    match /themes/{themeId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null && isAdmin();
+    }
+    
+    // Theme votes collection - usuarios autenticados pueden votar
+    match /theme_votes/{voteId} {
+      // Todos pueden leer votos (para mostrar resultados - aunque los ocultemos en el frontend)
+      allow read: if true;
+      
+      // Solo usuarios autenticados pueden crear votos
+      allow create: if request.auth != null 
+        && request.auth.uid == request.resource.data.userId
+        && validateVoteData();
+      
+      // Solo el dueño del voto puede eliminarlo (para cambiar voto), o un admin
+      allow delete: if request.auth != null 
+        && (request.auth.uid == resource.data.userId || isAdmin());
+      
+      // No permitir updates directos - solo delete + create para cambiar voto
+      allow update: if false;
+    }
+    
+    // Participants collection - para el sistema de participación en jams
+    match /participants/{participantId} {
+      // Todos pueden leer participantes (para estadísticas y verificaciones)
+      allow read: if true;
+      
+      // Usuarios pueden crear su propia participación O admins pueden crear cualquier participación
+      allow create: if request.auth != null 
+        && (
+          // Caso 1: Usuario crea su propia participación
+          (request.auth.uid == request.resource.data.userId && validateParticipantData())
+          ||
+          // Caso 2: Admin puede crear participación para cualquier usuario (migración)
+          (isAdmin() && validateParticipantDataAdmin())
+        );
+      
+      // Solo el dueño puede eliminar su participación (salirse de la jam), o un admin
+      allow delete: if request.auth != null 
+        && (request.auth.uid == resource.data.userId || isAdmin());
+      
+      // Solo admins pueden actualizar participaciones (para casos especiales)
+      allow update: if request.auth != null && isAdmin();
+    }
+    
+    // ✅ CORREGIDO: Users collection - información de usuarios con permisos de admin
+    match /users/{userId} {
+      // ✅ LECTURA PÚBLICA: Cualquiera puede leer información básica de usuarios
+      // Esto es necesario para mostrar nombres en certificados públicos
+      allow read: if true;
+      
+      // Los usuarios pueden crear/actualizar su propio perfil O los admins pueden modificar cualquier perfil
+      allow create, update: if request.auth != null 
+        && (
+          // Caso 1: Usuario modifica su propio perfil
+          (request.auth.uid == userId && validateUserData())
+          ||
+          // Caso 2: Admin puede modificar cualquier perfil
+          (isAdmin() && validateUserDataAdmin())
+        );
+      
+      // Solo admins pueden eliminar usuarios
+      allow delete: if request.auth != null && isAdmin();
+    }
+    
+    // Certificates collection - sistema de certificados
+    match /certificates/{certificateId} {
+      // ✅ LECTURA PÚBLICA: Cualquiera puede leer certificados (para enlaces públicos)
+      allow read: if true;
+      
+      // Solo admins pueden crear certificados
+      allow create: if request.auth != null 
+        && isAdmin() 
+        && validateCertificateData();
+      
+      // Solo admins pueden actualizar certificados
+      allow update: if request.auth != null && isAdmin();
+      
+      // Solo admins pueden eliminar certificados
+      allow delete: if request.auth != null && isAdmin();
+    }
+    
+    // Admin logs - solo admins pueden escribir
+    match /admin_logs/{logId} {
+      allow read, write: if request.auth != null && isAdmin();
+    }
+    
+    // ===== FUNCIONES DE VALIDACIÓN =====
+    
+    // Función para validar datos del post
+    function validatePostData() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['userId', 'username', 'description', 'edition', 'lookingFor', 'canDo'])
+        && data.userId is string
+        && data.username is string
+        && data.description is string
+        && data.edition is string
+        && data.lookingFor is list
+        && data.canDo is list;
+    }
+    
+    // Función para validar datos del voto
+    function validateVoteData() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['userId', 'jamId', 'themeId'])
+        && data.userId is string
+        && data.jamId is string
+        && data.themeId is string
+        && data.userId == request.auth.uid; // Asegurar que el voto es del usuario autenticado
+    }
+    
+    // Función para validar datos del participante (usuarios normales)
+    function validateParticipantData() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['userId', 'jamId', 'isActive'])
+        && data.userId is string
+        && data.jamId is string
+        && data.isActive is bool
+        && data.userId == request.auth.uid; // Asegurar que la participación es del usuario autenticado
+    }
+    
+    // Función para validar datos del participante (admins - para migración)
+    function validateParticipantDataAdmin() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['userId', 'jamId', 'isActive'])
+        && data.userId is string
+        && data.jamId is string
+        && data.isActive is bool;
+        // No validamos que data.userId == request.auth.uid para admins
+    }
+    
+    // ✅ NUEVA: Función para validar datos del usuario (usuarios normales)
+    function validateUserData() {
+      let data = request.resource.data;
+      return (
+        (!data.keys().hasAny(['displayName']) || (data.displayName is string && data.displayName.size() <= 100)) &&
+        (!data.keys().hasAny(['fullName']) || (data.fullName is string && data.fullName.size() <= 100)) &&
+        (!data.keys().hasAny(['name']) || (data.name is string && data.name.size() <= 100)) &&
+        (!data.keys().hasAny(['email']) || (data.email is string && data.email.size() <= 200)) &&
+        (!data.keys().hasAny(['photoURL']) || (data.photoURL is string && data.photoURL.size() <= 500)) &&
+        (!data.keys().hasAny(['bio']) || (data.bio is string && data.bio.size() <= 500)) &&
+        (!data.keys().hasAny(['itchUsername']) || (data.itchUsername is string && data.itchUsername.size() <= 50)) &&
+        (!data.keys().hasAny(['country']) || (data.country is string && data.country.size() <= 100)) &&
+        (!data.keys().hasAny(['city']) || (data.city is string && data.city.size() <= 100)) &&
+        (!data.keys().hasAny(['googleDisplayName']) || data.googleDisplayName is string) &&
+        (!data.keys().hasAny(['googlePhotoURL']) || data.googlePhotoURL is string) &&
+        (!data.keys().hasAny(['firstName']) || (data.firstName is string && data.firstName.size() <= 50)) &&
+        (!data.keys().hasAny(['lastName']) || (data.lastName is string && data.lastName.size() <= 50)) &&
+        (!data.keys().hasAny(['createdAt']) || data.createdAt is timestamp) &&
+        (!data.keys().hasAny(['updatedAt']) || data.updatedAt is timestamp) &&
+        (!data.keys().hasAny(['lastGoogleSync']) || data.lastGoogleSync is timestamp)
+      );
+    }
+    
+    // ✅ NUEVA: Función para validar datos del usuario (admins - más permisiva)
+    function validateUserDataAdmin() {
+      let data = request.resource.data;
+      // Los admins pueden modificar cualquier campo válido
+      // Validación más básica para permitir flexibilidad a los admins
+      return (
+        (!data.keys().hasAny(['displayName']) || data.displayName is string) &&
+        (!data.keys().hasAny(['fullName']) || data.fullName is string) &&
+        (!data.keys().hasAny(['name']) || data.name is string) &&
+        (!data.keys().hasAny(['email']) || data.email is string) &&
+        (!data.keys().hasAny(['photoURL']) || data.photoURL is string) &&
+        (!data.keys().hasAny(['bio']) || data.bio is string) &&
+        (!data.keys().hasAny(['itchUsername']) || data.itchUsername is string) &&
+        (!data.keys().hasAny(['country']) || data.country is string) &&
+        (!data.keys().hasAny(['city']) || data.city is string) &&
+        (!data.keys().hasAny(['googleDisplayName']) || data.googleDisplayName is string) &&
+        (!data.keys().hasAny(['googlePhotoURL']) || data.googlePhotoURL is string) &&
+        (!data.keys().hasAny(['firstName']) || data.firstName is string) &&
+        (!data.keys().hasAny(['lastName']) || data.lastName is string) &&
+        (!data.keys().hasAny(['createdAt']) || data.createdAt is timestamp) &&
+        (!data.keys().hasAny(['updatedAt']) || data.updatedAt is timestamp) &&
+        (!data.keys().hasAny(['lastGoogleSync']) || data.lastGoogleSync is timestamp)
+      );
+    }
+    
+    // Función para validar datos del certificado
+    function validateCertificateData() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['userId', 'jamId', 'jamName', 'category', 'isWinner'])
+        && data.userId is string
+        && data.jamId is string
+        && data.jamName is string
+        && data.category is string
+        && data.isWinner is bool;
+    }
+    
+    // Función para verificar si es admin (lista de emails)
+    function isAdmin() {
+      return request.auth.token.email in [
+        'facundo.tnd@gmail.com',  // Tu email
+        'admin@example.com'
+      ];
+    }
+  }
+}

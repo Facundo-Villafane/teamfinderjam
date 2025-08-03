@@ -40,9 +40,9 @@ const addQRCodeToPDF = async (pdf, gameLink, pageWidth, pageHeight) => {
     
     const qrDataURL = await generateQRCodeWithLibrary(gameLink);
     
-    // Posición del QR (esquina inferior derecha, más discreto)
+    // Posición del QR (esquina inferior derecha, ligeramente más a la izquierda)
     const qrSize = 20; // Más pequeño
-    const margin = 15;
+    const margin = 20; // Aumentado de 15 a 20 para moverlo más a la izquierda
     const qrX = pageWidth - qrSize - margin;
     const qrY = pageHeight - qrSize - margin - 15;
     
@@ -55,7 +55,7 @@ const addQRCodeToPDF = async (pdf, gameLink, pageWidth, pageHeight) => {
     
     // Texto discreto
     pdf.setFontSize(7);
-    pdf.setTextColor(120, 120, 120);
+    pdf.setTextColor(180, 180, 180); // Gris claro para fondo verde
     pdf.setFont('helvetica', 'normal');
     pdf.text('Jugar', qrX + (qrSize / 2), qrY + qrSize + 4, { align: 'center' });
     
@@ -99,7 +99,7 @@ const loadAndAddLogo = async (pdf, logoUrl, pageWidth) => {
         const logoWidth = logoHeight * aspectRatio;
         
         const logoX = pageWidth - logoWidth - 20;
-        const logoY = 15;
+        const logoY = 20; // Movido de 15 a 20 (5px más abajo)
         
         pdf.addImage(img, 'PNG', logoX, logoY, logoWidth, logoHeight);
         resolve();
@@ -222,22 +222,58 @@ const loadBackgroundImage = async (pdf, imageUrl, pageWidth, pageHeight) => {
  * Crea un fondo de respaldo elegante
  */
 const createFallbackBackground = (pdf, pageWidth, pageHeight, isWinner) => {
-  if (isWinner) {
-    pdf.setFillColor(255, 215, 0);
-  } else {
-    pdf.setFillColor(59, 130, 246);
-  }
+  console.log('Creating formal pattern background with green borders, isWinner:', isWinner);
   
+  // Fondo base - gris oscuro elegante para contraste con letras blancas
+  pdf.setFillColor(25, 25, 30); // Gris oscuro neutro
   pdf.rect(0, 0, pageWidth, pageHeight, 'F');
   
-  // Patrón decorativo sutil
-  pdf.setFillColor(255, 255, 255, 0.1);
-  for (let i = 0; i < 20; i++) {
-    const x = Math.random() * pageWidth;
-    const y = Math.random() * pageHeight;
-    const size = Math.random() * 10 + 5;
-    pdf.circle(x, y, size, 'F');
+  // Patrón geométrico sutil - líneas diagonales muy sutiles en gris más claro
+  pdf.setDrawColor(40, 40, 45); // Gris más claro pero sutil
+  pdf.setLineWidth(0.3);
+  
+  // Líneas diagonales espaciadas para crear textura sutil
+  const spacing = 8;
+  for (let i = -pageHeight; i < pageWidth + pageHeight; i += spacing) {
+    pdf.line(i, 0, i + pageHeight, pageHeight);
   }
+  
+  // Líneas diagonales en dirección opuesta (más sutiles)
+  pdf.setDrawColor(35, 35, 40); // Gris intermedio
+  pdf.setLineWidth(0.2);
+  for (let i = 0; i < pageWidth + pageHeight; i += spacing * 2) {
+    pdf.line(i, pageHeight, i - pageHeight, 0);
+  }
+  
+  // Patrón de puntos muy sutiles en las esquinas - gris claro
+  pdf.setFillColor(50, 50, 55); // Gris claro pero sutil
+  const dotSize = 0.5;
+  const dotSpacing = 12;
+  
+  // Esquinas con patrón de puntos
+  for (let x = 0; x < 60; x += dotSpacing) {
+    for (let y = 0; y < 40; y += dotSpacing) {
+      // Esquina superior izquierda
+      pdf.circle(x + 15, y + 15, dotSize, 'F');
+      // Esquina superior derecha
+      pdf.circle(pageWidth - 60 + x, y + 15, dotSize, 'F');
+      // Esquina inferior izquierda
+      pdf.circle(x + 15, pageHeight - 40 + y, dotSize, 'F');
+      // Esquina inferior derecha
+      pdf.circle(pageWidth - 60 + x, pageHeight - 40 + y, dotSize, 'F');
+    }
+  }
+  
+  // Marco verde elegante - usando tu color #1B6E3B
+  pdf.setDrawColor(27, 110, 59); // Verde #1B6E3B para borde exterior
+  pdf.setLineWidth(2);
+  pdf.rect(10, 10, pageWidth - 20, pageHeight - 20); // Borde exterior verde
+  
+  pdf.setDrawColor(40, 130, 75); // Verde más claro para borde interior
+  pdf.setLineWidth(0.8);
+  pdf.rect(13, 13, pageWidth - 26, pageHeight - 26); // Borde interior verde claro
+  
+  // Sin marco adicional - solo los marcos verdes
 };
 
 /**
@@ -247,15 +283,15 @@ const addFooterInfo = (pdf, certificateData, pageWidth, pageHeight) => {
   const bottomY = pageHeight - 25;
   pdf.setFontSize(10);
   pdf.setFont('helvetica', 'normal');
-  pdf.setTextColor(160, 160, 160);
+  pdf.setTextColor(160, 160, 160); // Gris claro para fondo verde
   
   // Fecha (izquierda)
   const dateText = `Fecha: ${certificateData.date.toLocaleDateString('es-ES')}`;
   pdf.text(dateText, 20, bottomY);
   
-  // ID del certificado (derecha, pero no tanto como para interferir con el QR)
+  // ID del certificado (debajo de la fecha para evitar interferir con otros elementos)
   const idText = `ID: ${certificateData.certificateId}`;
-  pdf.text(idText, pageWidth - 80, bottomY, { align: 'right' });
+  pdf.text(idText, 20, bottomY + 8);
 };
 
 /**
@@ -288,7 +324,14 @@ const addRecognitionCertificateText = (pdf, certificateData, pageWidth, pageHeig
   pdf.text(categoryInfo.introText, centerX, 65, { align: 'center' });
   
   // 3. NOMBRE DEL JUEGO - DESTACADO SOLO CON TIPOGRAFÍA
+  // Para certificados de reconocimiento, priorizar el nombre del juego
   const displayName = certificateData.gameName || certificateData.userName;
+  
+  console.log('DisplayName for recognition certificate:', {
+    gameName: certificateData.gameName,
+    userName: certificateData.userName,
+    displayName: displayName
+  });
   
   let gameNameSize = 28;
   pdf.setFont('helvetica', 'bold');
@@ -305,10 +348,17 @@ const addRecognitionCertificateText = (pdf, certificateData, pageWidth, pageHeig
   pdf.setTextColor(255, 117, 143); // Rosa claro
   pdf.text(displayName, centerX, gameTextY, { align: 'center' });
   
-  // 4. NOMBRE DEL CREADOR (si es diferente del juego)
+  // 4. INFORMACIÓN DEL CREADOR/EQUIPO
   let yPosition = gameTextY + 20;
   
-  if (certificateData.gameName && certificateData.userName) {
+  // Si hay múltiples participantes, mostrar el equipo
+  if (certificateData.participants && certificateData.participants.length > 1) {
+    console.log('Recognition certificate: Showing team info');
+    // No mostrar 'Creado por' individual, iremos directo al equipo
+  }
+  // Si hay un solo participante y nombre del juego, mostrar creador individual
+  else if (certificateData.gameName && certificateData.userName) {
+    console.log('Recognition certificate: Showing individual creator');
     pdf.setFontSize(13);
     pdf.setTextColor(180, 180, 180);
     pdf.setFont('helvetica', 'normal');
@@ -326,7 +376,14 @@ const addRecognitionCertificateText = (pdf, certificateData, pageWidth, pageHeig
   }
   
   // 5. MÚLTIPLES PARTICIPANTES (si los hay)
+  console.log('Checking participants for recognition certificate:', {
+    participants: certificateData.participants,
+    participantsLength: certificateData.participants?.length,
+    hasMultipleParticipants: certificateData.participants && certificateData.participants.length > 1
+  });
+  
   if (certificateData.participants && certificateData.participants.length > 1) {
+    console.log('Rendering multiple participants for recognition certificate');
     pdf.setFontSize(13);
     pdf.setTextColor(180, 180, 180);
     pdf.setFont('helvetica', 'normal');
@@ -334,7 +391,8 @@ const addRecognitionCertificateText = (pdf, certificateData, pageWidth, pageHeig
     
     yPosition += 12;
     
-    certificateData.participants.forEach((participant) => {
+    certificateData.participants.forEach((participant, index) => {
+      console.log(`Rendering participant ${index + 1}:`, participant.name);
       pdf.setFontSize(16);
       pdf.setFont('helvetica', 'bold');
       pdf.setTextColor(146, 248, 207);
@@ -343,6 +401,10 @@ const addRecognitionCertificateText = (pdf, certificateData, pageWidth, pageHeig
     });
     
     yPosition += 10;
+  } else if (certificateData.participants && certificateData.participants.length === 1) {
+    console.log('Single participant, showing individual name');
+  } else {
+    console.log('No participants array found');
   }
   
   // 6. DESCRIPCIÓN LIMPIA
@@ -529,30 +591,53 @@ const addParticipationCertificateText = (pdf, certificateData, pageWidth, pageHe
  * CERTIFICADOS PERSONALIZADOS (Manual Certificate Creator) - MEJORADO
  */
 const addCustomCertificateText = (pdf, certificateData, pageWidth, pageHeight, centerX) => {
+  console.log('=== CUSTOM CERTIFICATE TEMPLATE ===');
+  console.log('Certificate data for custom template:', {
+    gameName: certificateData.gameName,
+    participants: certificateData.participants,
+    participantsCount: certificateData.participants?.length,
+    customMainText: certificateData.customMainText
+  });
+  
   // 1. TÍTULO PERSONALIZADO
   pdf.setFontSize(24);
-  pdf.setTextColor(255, 255, 255);
+  pdf.setTextColor(255, 255, 255); // Blanco para contraste con fondo verde
   pdf.setFont('helvetica', 'bold');
   pdf.text(certificateData.customTitle || certificateData.title, centerX, 35, { align: 'center' });
   
+  // Línea decorativa debajo del título
+  pdf.setDrawColor(200, 200, 200); // Gris claro
+  pdf.setLineWidth(0.8);
+  pdf.line(centerX - 80, 42, centerX + 80, 42);
+  
   // 2. SUBTÍTULO (si existe)
   let yPosition = 50;
+  
   if (certificateData.customSubtitle || certificateData.subtitle) {
     pdf.setFontSize(16);
-    pdf.setTextColor(220, 220, 220);
+    pdf.setTextColor(220, 220, 220); // Gris claro para subtítulo
     pdf.setFont('helvetica', 'normal');
     pdf.text(certificateData.customSubtitle || certificateData.subtitle, centerX, yPosition, { align: 'center' });
     yPosition += 20;
   }
   
-  // 3. CONTENIDO PRINCIPAL PERSONALIZADO
+  // 4. CONTENIDO PRINCIPAL PERSONALIZADO
   if (certificateData.customMainText || certificateData.mainText) {
     let text = certificateData.customMainText || certificateData.mainText;
     
     // ✅ CORRECCIÓN: Manejar reemplazo de nombres para equipos
+    console.log('Processing participants in custom template:', {
+      participants: certificateData.participants,
+      participantsLength: certificateData.participants?.length,
+      hasMultipleParticipants: certificateData.participants && certificateData.participants.length > 1
+    });
+    
     if (certificateData.participants && certificateData.participants.length > 1) {
+      console.log('CUSTOM TEMPLATE: Processing multiple participants');
       // Para equipos, reemplazar [NOMBRE] con todos los nombres del equipo
       const names = certificateData.participants.map(p => p.name);
+      console.log('Team member names:', names);
+      
       let nameText;
       
       if (names.length === 2) {
@@ -565,22 +650,34 @@ const addCustomCertificateText = (pdf, certificateData, pageWidth, pageHeight, c
         nameText = names.join(', ');
       }
       
-      text = text.replace(/\[NOMBRE\]/g, nameText);
+      console.log('Combined team name text:', nameText);
+      // Marcar los nombres para que aparezcan en negrita e itálica
+      text = text.replace(/\[NOMBRE\]/g, `***${nameText}***`);
     } else {
-      // Para participante individual
-      text = text.replace(/\[NOMBRE\]/g, certificateData.userName);
+      console.log('CUSTOM TEMPLATE: Processing single participant');
+      // Para participante individual, también aplicar estilo especial
+      text = text.replace(/\[NOMBRE\]/g, `***${certificateData.userName}***`);
     }
     
     // Reemplazar otros placeholders
+    console.log('Processing game name replacement:', {
+      gameName: certificateData.gameName,
+      hasGameName: !!certificateData.gameName,
+      textBeforeReplacement: text.substring(0, 100) + '...'
+    });
+    
     if (certificateData.gameName) {
       text = text.replace(/\[JUEGO\]/g, certificateData.gameName);
+      console.log('Game name replaced. Text sample after replacement:', text.substring(0, 100) + '...');
+    } else {
+      console.log('No game name found to replace [JUEGO] placeholder');
     }
     
     // Dividir en líneas y procesar
     const lines = text.split('\n');
     
     pdf.setFontSize(13);
-    pdf.setTextColor(190, 190, 190);
+    pdf.setTextColor(200, 200, 200); // Gris claro para texto principal
     pdf.setFont('helvetica', 'normal');
     
     lines.forEach((line) => {
@@ -589,7 +686,7 @@ const addCustomCertificateText = (pdf, certificateData, pageWidth, pageHeight, c
         return;
       }
       
-      // Detectar texto que debe ir en negrita
+      // Detectar texto que debe ir en negrita o negrita+itálica
       if (line.includes('LO LOGRASTE') || 
           line.includes('lo lograste') ||
           line.includes('lo lograron') ||
@@ -598,24 +695,34 @@ const addCustomCertificateText = (pdf, certificateData, pageWidth, pageHeight, c
           line.includes('lo entendió perfectamente') ||
           line.includes('con intención') ||
           line.includes('conduce') ||
+          line.match(/\*\*\*.*\*\*\*/) ||
           line.match(/\*\*.*\*\*/)) {
         
-        // Procesar línea con texto en negrita
-        const parts = line.split(/(\*\*.*?\*\*|LO LOGRASTE|lo lograste|lo lograron|no se fuerza, se nota|no hay límites|lo entendió perfectamente|con intención|conduce)/);
+        // Procesar línea con texto con estilos especiales
+        const parts = line.split(/(\*\*\*.*?\*\*\*|\*\*.*?\*\*|LO LOGRASTE|lo lograste|lo lograron|no se fuerza, se nota|no hay límites|lo entendió perfectamente|con intención|conduce)/);
         let xOffset = 0;
-        const cleanLine = line.replace(/\*\*/g, '');
+        const cleanLine = line.replace(/\*\*\*/g, '').replace(/\*\*/g, '');
         const startX = centerX - (pdf.getTextWidth(cleanLine) / 2);
         
         parts.forEach(part => {
-          if (part.match(/\*\*.*\*\*|LO LOGRASTE|lo lograste|lo lograron|no se fuerza, se nota|no hay límites|lo entendió perfectamente|con intención|conduce/)) {
+          if (part.match(/\*\*\*.*\*\*\*/)) {
+            // Texto en negrita e itálica (nombres de participantes)
+            pdf.setFont('helvetica', 'bolditalic');
+            pdf.setTextColor(255, 255, 255); // Blanco para máximo contraste
+            const cleanText = part.replace(/\*\*\*/g, '');
+            pdf.text(cleanText, startX + xOffset, yPosition);
+            xOffset += pdf.getTextWidth(cleanText);
+          } else if (part.match(/\*\*.*\*\*|LO LOGRASTE|lo lograste|lo lograron|no se fuerza, se nota|no hay límites|lo entendió perfectamente|con intención|conduce/)) {
+            // Texto solo en negrita
             pdf.setFont('helvetica', 'bold');
-            pdf.setTextColor(255, 255, 255);
+            pdf.setTextColor(240, 240, 240); // Gris muy claro
             const cleanText = part.replace(/\*\*/g, '');
             pdf.text(cleanText, startX + xOffset, yPosition);
             xOffset += pdf.getTextWidth(cleanText);
           } else if (part.trim()) {
+            // Texto normal
             pdf.setFont('helvetica', 'normal');
-            pdf.setTextColor(190, 190, 190);
+            pdf.setTextColor(200, 200, 200); // Gris claro
             pdf.text(part, startX + xOffset, yPosition);
             xOffset += pdf.getTextWidth(part);
           }
@@ -623,7 +730,7 @@ const addCustomCertificateText = (pdf, certificateData, pageWidth, pageHeight, c
       } else {
         // Línea normal
         pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(190, 190, 190);
+        pdf.setTextColor(200, 200, 200); // Gris claro para fondo oscuro
         pdf.text(line, centerX, yPosition, { align: 'center' });
       }
       
@@ -631,13 +738,23 @@ const addCustomCertificateText = (pdf, certificateData, pageWidth, pageHeight, c
     });
   }
   
-  // 4. INFORMACIÓN DE PARTICIPANTES (si es equipo)
-  if (certificateData.participants && certificateData.participants.length > 1) {
-    yPosition += 10;
-    pdf.setFontSize(12);
-    pdf.setTextColor(160, 160, 160);
-    pdf.setFont('helvetica', 'italic');
-    pdf.text(`Certificado de equipo - ${certificateData.participants.length} participantes`, centerX, yPosition, { align: 'center' });
+  // 4. NOMBRE DEL JUEGO (después del contenido principal)
+  if (certificateData.gameName && (certificateData.category !== 'participation' && certificateData.category !== 'Participación')) {
+    console.log('CUSTOM TEMPLATE: Adding game name section after main content');
+    yPosition += 15;
+    
+    // Texto "Juego presentado:"
+    pdf.setFontSize(14);
+    pdf.setTextColor(180, 180, 180); // Gris claro
+    pdf.setFont('helvetica', 'normal');
+    pdf.text('Juego presentado:', centerX, yPosition, { align: 'center' });
+    yPosition += 12;
+    
+    // Nombre del juego en dorado (dorado brillante que contrasta con verde)
+    pdf.setFontSize(18);
+    pdf.setTextColor(255, 215, 0); // Dorado brillante para contraste con verde
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(certificateData.gameName, centerX, yPosition, { align: 'center' });
     yPosition += 10;
   }
   
@@ -647,12 +764,12 @@ const addCustomCertificateText = (pdf, certificateData, pageWidth, pageHeight, c
   const signatureText = certificateData.customSignature || certificateData.signature || 'Organización';
   pdf.setFontSize(14);
   pdf.setFont('helvetica', 'bold');
-  pdf.setTextColor(220, 220, 220);
+  pdf.setTextColor(220, 220, 220); // Gris claro para la firma
   
   const signatureWidth = pdf.getTextWidth(signatureText);
   
   // Línea elegante sobre la firma
-  pdf.setDrawColor(255, 255, 255);
+  pdf.setDrawColor(180, 180, 180); // Gris claro para contraste con fondo verde
   pdf.setLineWidth(0.5);
   pdf.line(centerX - signatureWidth/2 - 10, yPosition - 5, centerX + signatureWidth/2 + 10, yPosition - 5);
   
@@ -670,11 +787,28 @@ const addCertificateText = (pdf, certificateData, pageWidth, pageHeight) => {
     category: certificateData.category,
     isWinner: certificateData.isWinner,
     gameName: certificateData.gameName,
+    userName: certificateData.userName,
     customTitle: certificateData.customTitle,
     customMainText: certificateData.customMainText,
     participants: certificateData.participants,
+    participantsLength: certificateData.participants?.length,
     isRecognition: isRecognitionCertificate(certificateData)
   });
+  
+  console.log('DETAILED ANALYSIS:');
+  console.log('- Has customTitle:', !!certificateData.customTitle);
+  console.log('- Has customMainText:', !!certificateData.customMainText);
+  console.log('- customTitle value:', certificateData.customTitle);
+  console.log('- customMainText value:', certificateData.customMainText);
+  console.log('- Will use CUSTOM template:', !!(certificateData.customTitle || certificateData.customMainText));
+  console.log('- Will use RECOGNITION template:', isRecognitionCertificate(certificateData) && !(certificateData.customTitle || certificateData.customMainText));
+  console.log('- Participants array:', certificateData.participants);
+  console.log('- Participants count:', certificateData.participants?.length || 0);
+  if (certificateData.participants) {
+    certificateData.participants.forEach((p, i) => {
+      console.log(`  Participant ${i + 1}:`, p);
+    });
+  }
   
   // ✅ CORRECCIÓN: PRIORIDAD 1 - Certificados personalizados (Manual Certificate Creator)
   if (certificateData.customTitle || certificateData.customMainText) {
@@ -701,7 +835,12 @@ const addCertificateText = (pdf, certificateData, pageWidth, pageHeight) => {
  */
 export const generateCertificatePDF = async (certificateData, backgroundImageUrl = null) => {
   try {
-    console.log('Generating certificate with data:', certificateData);
+    console.log('=== GENERATING CERTIFICATE PDF ===');
+    console.log('Certificate data received:', {
+      ...certificateData,
+      participantsCount: certificateData.participants?.length || 0
+    });
+    console.log('Background image URL:', backgroundImageUrl);
 
     // Crear nuevo PDF en formato horizontal
     const pdf = new jsPDF({
@@ -713,21 +852,13 @@ export const generateCertificatePDF = async (certificateData, backgroundImageUrl
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
 
-    // 1. Cargar imagen de fondo si se proporciona
-    if (backgroundImageUrl) {
-      try {
-        await loadBackgroundImage(pdf, backgroundImageUrl, pageWidth, pageHeight);
-      } catch {
-        console.warn('Could not load background image, using fallback');
-        createFallbackBackground(pdf, pageWidth, pageHeight, certificateData.isWinner);
-      }
-    } else {
-      createFallbackBackground(pdf, pageWidth, pageHeight, certificateData.isWinner);
-    }
+    // 1. Usar patrón formal (imagen de fondo deshabilitada temporalmente)
+    console.log('Using formal pattern background instead of image');
+    createFallbackBackground(pdf, pageWidth, pageHeight, certificateData.isWinner);
 
     // 2. Cargar y agregar logo
     const logoUrl = '/images/logo-jam.png';
-    await loadAndAddLogo(pdf, logoUrl, pageWidth, pageHeight);
+    await loadAndAddLogo(pdf, logoUrl, pageWidth);
 
     // 3. Agregar texto del certificado
     addCertificateText(pdf, certificateData, pageWidth, pageHeight);

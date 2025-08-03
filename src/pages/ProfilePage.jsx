@@ -1,5 +1,6 @@
 // src/pages/ProfilePage.jsx - Página de perfil con descarga de certificados de equipo corregida
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   User, 
   Crown, 
@@ -15,7 +16,10 @@ import {
   Settings,
   Star,
   Eye,
-  X
+  X,
+  Share2,
+  Link,
+  Copy
 } from 'lucide-react';
 import { getPostsByUser } from '../firebase/firestore';
 import { getUserJamHistory } from '../firebase/participants';
@@ -37,6 +41,8 @@ const ProfilePage = ({ user }) => {
   const [profileComplete, setProfileComplete] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [previewCertificate, setPreviewCertificate] = useState(null);
+  const [shareMenuOpen, setShareMenuOpen] = useState(null);
+  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
   
   // Removed unused admin check
 
@@ -46,6 +52,20 @@ const ProfilePage = ({ user }) => {
       checkProfileCompleteness();
     }
   }, [user]);
+
+  // Cerrar menú de compartir al hacer click fuera
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (shareMenuOpen && !event.target.closest('.share-menu-container')) {
+        setShareMenuOpen(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [shareMenuOpen]);
 
   const checkProfileCompleteness = async () => {
     if (!user) return;
@@ -227,6 +247,89 @@ const ProfilePage = ({ user }) => {
     }
   };
 
+  const generateShareableLink = (certificate) => {
+    // Generar un enlace público al certificado (puedes implementar una página pública más tarde)
+    const baseUrl = window.location.origin;
+    return `${baseUrl}/certificate/${certificate.id}`;
+  };
+
+  const generateShareText = (certificate) => {
+    const categoryName = getCategoryName(certificate.category);
+    const certificateType = certificate.isWinner ? 'Reconocimiento' : 'Participación';
+    
+    let text = `🏆 ¡Acabo de obtener un certificado de ${certificateType}`;
+    if (certificate.isWinner) {
+      text += ` - ${categoryName}`;
+    }
+    text += ` en la Game Jam "${certificate.jamName}"!`;
+    
+    if (certificate.gameName) {
+      text += ` 🎮 Juego: "${certificate.gameName}"`;
+    }
+    
+    if (certificate.participants && certificate.participants.length > 1) {
+      text += ` 👥 En equipo con: ${certificate.participants.map(p => p.name).join(', ')}`;
+    }
+    
+    text += ` #GameJam #IndieDev #GameDevelopment`;
+    return text;
+  };
+
+  const handleShareTwitter = (certificate) => {
+    const text = generateShareText(certificate);
+    const url = generateShareableLink(certificate);
+    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
+    window.open(twitterUrl, '_blank');
+    setShareMenuOpen(null);
+  };
+
+  const handleShareLinkedIn = (certificate) => {
+    const text = generateShareText(certificate);
+    const url = generateShareableLink(certificate);
+    const linkedInUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}&summary=${encodeURIComponent(text)}`;
+    window.open(linkedInUrl, '_blank');
+    setShareMenuOpen(null);
+  };
+
+  const handleShareWhatsApp = (certificate) => {
+    const text = generateShareText(certificate);
+    const url = generateShareableLink(certificate);
+    const whatsappText = `${text}\n\n${url}`;
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(whatsappText)}`;
+    window.open(whatsappUrl, '_blank');
+    setShareMenuOpen(null);
+  };
+
+  const handleCopyLink = async (certificate) => {
+    const url = generateShareableLink(certificate);
+    try {
+      await navigator.clipboard.writeText(url);
+      alert('Enlace copiado al portapapeles');
+    } catch (err) {
+      // Fallback para navegadores que no soportan clipboard API
+      const textArea = document.createElement('textarea');
+      textArea.value = url;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      alert('Enlace copiado al portapapeles');
+    }
+    setShareMenuOpen(null);
+  };
+
+  const handleAddToLinkedInProfile = (certificate) => {
+    // Para LinkedIn Learning/Certifications - abrir LinkedIn con parámetros pre-llenados
+    const categoryName = getCategoryName(certificate.category);
+    const certificateType = certificate.isWinner ? 'Reconocimiento' : 'Participación';
+    
+    // URL para agregar certificación a LinkedIn
+    const linkedInCertUrl = `https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&name=${encodeURIComponent(`${certificateType} - ${categoryName}`)}&organizationName=${encodeURIComponent('Game Jam UTN')}&issueYear=${new Date().getFullYear()}&issueMonth=${new Date().getMonth() + 1}`;
+    
+    window.open(linkedInCertUrl, '_blank');
+    setShareMenuOpen(null);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -372,7 +475,7 @@ const ProfilePage = ({ user }) => {
                       </div>
                     </div>
                     
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 relative">
                       <button
                         onClick={() => setPreviewCertificate(certificate)}
                         className="p-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg transition-colors"
@@ -389,6 +492,47 @@ const ProfilePage = ({ user }) => {
                       >
                         <Download className="w-4 h-4 text-gray-800" />
                       </button>
+
+                      <div className="relative share-menu-container">
+                        <button
+                          onClick={(e) => {
+                            if (shareMenuOpen === certificate.id) {
+                              setShareMenuOpen(null);
+                              return;
+                            }
+
+                            const buttonRect = e.currentTarget.getBoundingClientRect();
+                            const windowWidth = window.innerWidth;
+                            const windowHeight = window.innerHeight;
+                            
+                            // Calcular posición óptima
+                            let x = buttonRect.right - 256; // 256px = w-64
+                            let y = buttonRect.bottom + 8;
+                            
+                            // Ajustar si se sale por la derecha
+                            if (x < 16) {
+                              x = 16;
+                            }
+                            
+                            // Ajustar si se sale por abajo
+                            if (y + 300 > windowHeight) {
+                              y = buttonRect.top - 300 - 8;
+                            }
+                            
+                            // Ajustar si se sale por arriba
+                            if (y < 16) {
+                              y = 16;
+                            }
+                            
+                            setMenuPosition({ x, y });
+                            setShareMenuOpen(certificate.id);
+                          }}
+                          className="p-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg transition-colors"
+                          title="Compartir certificado"
+                        >
+                          <Share2 className="w-4 h-4 text-gray-800" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                   
@@ -531,6 +675,113 @@ const ProfilePage = ({ user }) => {
           onDownload={() => handleDownloadCertificate(previewCertificate)}
         />
       )}
+
+      {/* Portal para menú de compartir - renderizado fuera del contenedor principal */}
+      {shareMenuOpen && (() => {
+        console.log('Portal rendering, shareMenuOpen:', shareMenuOpen);
+        console.log('Available certificates:', userCertificates.map(cert => ({ id: cert.id, jamName: cert.jamName })));
+        
+        const currentCertificate = userCertificates.find(cert => cert.id === shareMenuOpen);
+        console.log('Found certificate:', currentCertificate);
+        
+        if (!currentCertificate) {
+          console.log('No certificate found for ID:', shareMenuOpen);
+          return null;
+        }
+        
+        return createPortal(
+          <div 
+            className="fixed w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl"
+            style={{ 
+              left: menuPosition.x,
+              top: menuPosition.y,
+              zIndex: 1000 
+            }}
+          >
+            <div className="p-3 border-b border-gray-600">
+              <h4 className="font-semibold text-white text-sm">Compartir Certificado</h4>
+            </div>
+            
+            <div className="p-2 space-y-1">
+              <button
+                onMouseDown={() => {
+                  console.log('MOUSE DOWN on Twitter button');
+                  const text = generateShareText(currentCertificate);
+                  const url = generateShareableLink(currentCertificate);
+                  const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
+                  console.log('Opening Twitter URL:', twitterUrl);
+                  window.open(twitterUrl, '_blank');
+                  setShareMenuOpen(null);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2 text-sm text-white hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <div className="w-5 h-5 bg-blue-400 rounded flex items-center justify-center text-xs font-bold">𝕏</div>
+                Compartir en X
+              </button>
+
+              <button
+                onMouseDown={() => {
+                  console.log('MOUSE DOWN on LinkedIn button');
+                  const text = generateShareText(currentCertificate);
+                  const url = generateShareableLink(currentCertificate);
+                  const linkedInUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}&summary=${encodeURIComponent(text)}`;
+                  console.log('Opening LinkedIn URL:', linkedInUrl);
+                  window.open(linkedInUrl, '_blank');
+                  setShareMenuOpen(null);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2 text-sm text-white hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <div className="w-5 h-5 bg-blue-600 rounded flex items-center justify-center text-xs font-bold text-white">in</div>
+                Compartir en LinkedIn
+              </button>
+
+              <button
+                onMouseDown={() => {
+                  console.log('MOUSE DOWN on WhatsApp button');
+                  const text = generateShareText(currentCertificate);
+                  const url = generateShareableLink(currentCertificate);
+                  const whatsappText = `${text}\n\n${url}`;
+                  const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(whatsappText)}`;
+                  console.log('Opening WhatsApp URL:', whatsappUrl);
+                  window.open(whatsappUrl, '_blank');
+                  setShareMenuOpen(null);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2 text-sm text-white hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <div className="w-5 h-5 bg-green-500 rounded flex items-center justify-center text-xs font-bold text-white">💬</div>
+                Compartir en WhatsApp
+              </button>
+
+              <hr className="border-gray-600 my-1" />
+
+              <button
+                onClick={() => {
+                  console.log('Adding to LinkedIn profile:', currentCertificate);
+                  handleAddToLinkedInProfile(currentCertificate);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2 text-sm text-white hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <div className="w-5 h-5 bg-green-600 rounded flex items-center justify-center">
+                  <Award className="w-3 h-3 text-white" />
+                </div>
+                Agregar a perfil LinkedIn
+              </button>
+
+              <button
+                onClick={() => {
+                  console.log('Copying link:', currentCertificate);
+                  handleCopyLink(currentCertificate);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2 text-sm text-white hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <Copy className="w-4 h-4 text-gray-400" />
+                Copiar enlace
+              </button>
+            </div>
+          </div>,
+          document.body
+        );
+      })()}
     </div>
   );
 };

@@ -326,18 +326,52 @@ export const ManualCertificateCreator = ({ currentJam, onSuccess, onCancel }) =>
 
     setLoading(true);
     try {
-      const promises = selectedParticipants.map(userId => {
-        const participantData = {
+      // Si es un reconocimiento grupal, crear un certificado con múltiples participantes
+      if (certificateData.type === 'recognition' && selectedParticipants.length > 1) {
+        console.log('🏆 Creating GROUP recognition certificate');
+        
+        // Preparar array de participantes con nombres
+        const participantsArray = selectedParticipants.map(userId => ({
+          name: getDisplayName(userId),
+          userId: userId
+        }));
+        
+        console.log('Participants for group certificate:', participantsArray);
+        
+        const groupCertificateData = {
           ...certificateData,
-          isWinner: certificateData.type === 'recognition',
-          gameName: certificateData.type === 'recognition' ? certificateData.gameName : null,
-          gameLink: certificateData.type === 'recognition' ? certificateData.gameLink : null
+          isWinner: true,
+          gameName: certificateData.gameName,
+          gameLink: certificateData.gameLink,
+          participants: participantsArray,
+          isTeamCertificate: true,
+          recipientUserId: selectedParticipants[0] // Usuario principal que recibe el certificado
         };
         
-        return createCustomCertificate(userId, currentJam.id, participantData);
-      });
+        console.log('Creating group certificate with data:', groupCertificateData);
+        
+        // Crear un solo certificado grupal
+        await createCustomCertificate(selectedParticipants[0], currentJam.id, groupCertificateData);
+        
+      } else {
+        // Para participación o reconocimientos individuales, crear certificados separados
+        console.log('🎅 Creating INDIVIDUAL certificates');
+        
+        const promises = selectedParticipants.map(userId => {
+          const participantData = {
+            ...certificateData,
+            isWinner: certificateData.type === 'recognition',
+            gameName: certificateData.type === 'recognition' ? certificateData.gameName : null,
+            gameLink: certificateData.type === 'recognition' ? certificateData.gameLink : null,
+            participants: [{ name: getDisplayName(userId), userId: userId }], // Un solo participante
+            isTeamCertificate: false
+          };
+          
+          return createCustomCertificate(userId, currentJam.id, participantData);
+        });
 
-      await Promise.all(promises);
+        await Promise.all(promises);
+      }
       
       const typeText = certificateData.type === 'recognition' ? 'reconocimiento' : 'participación';
       alert(`¡${selectedParticipants.length} certificado(s) de ${typeText} creado(s) exitosamente!`);

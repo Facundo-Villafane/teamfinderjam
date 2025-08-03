@@ -403,11 +403,8 @@ export const createCustomCertificate = async (userId, jamId, certificateData) =>
     
     const jamData = jamDoc.data();
     
-    // Preparar datos del certificado
-    const certificateRef = doc(collection(db, CERTIFICATES_COLLECTION));
-    
-    const newCertificate = {
-      userId,
+    // Preparar datos base del certificado
+    const baseCertificateData = {
       jamId,
       jamName: jamData.name,
       category: certificateData.category || (certificateData.isWinner ? 'recognition' : 'participation'),
@@ -423,10 +420,9 @@ export const createCustomCertificate = async (userId, jamId, certificateData) =>
       gameName: certificateData.gameName || null,
       gameLink: certificateData.gameLink || null,
       
-      // NUEVO: Información del equipo
-      participants: certificateData.participants || null, // Array con todos los miembros del equipo
-      isTeamCertificate: certificateData.isTeamCertificate || false, // Flag para indicar certificado de equipo
-      recipientUserId: certificateData.recipientUserId || userId, // Usuario específico que recibe este certificado
+      // Información del equipo
+      participants: certificateData.participants || null,
+      isTeamCertificate: certificateData.isTeamCertificate || false,
       
       // Metadatos
       awardedDate: serverTimestamp(),
@@ -434,16 +430,55 @@ export const createCustomCertificate = async (userId, jamId, certificateData) =>
       updatedAt: serverTimestamp()
     };
 
-    await setDoc(certificateRef, newCertificate);
-    
-    console.log('Custom certificate created:', {
-      certificateId: certificateRef.id,
-      userId,
-      isTeam: certificateData.isTeamCertificate,
-      participantsCount: certificateData.participants?.length || 1
-    });
+    // Si es certificado de equipo, crear entradas para todos los miembros
+    if (certificateData.isTeamCertificate && certificateData.participants && certificateData.participants.length > 1) {
+      const batch = writeBatch(db);
+      const certificateIds = [];
+      
+      console.log('🏆 Creating team certificate entries for all members:', {
+        participantsCount: certificateData.participants.length,
+        participants: certificateData.participants.map(p => p.name)
+      });
+      
+      // Crear una entrada de certificado para cada miembro del equipo
+      for (const participant of certificateData.participants) {
+        const certificateRef = doc(collection(db, CERTIFICATES_COLLECTION));
+        const memberCertificate = {
+          ...baseCertificateData,
+          userId: participant.userId,
+          recipientUserId: participant.userId // Cada miembro es el destinatario de su copia
+        };
+        
+        batch.set(certificateRef, memberCertificate);
+        certificateIds.push(certificateRef.id);
+      }
+      
+      await batch.commit();
+      
+      console.log('Team certificate created for all members:', {
+        certificateIds,
+        participantsCount: certificateData.participants.length
+      });
 
-    return certificateRef.id;
+      return certificateIds[0]; // Retornar el primer ID como referencia
+    } else {
+      // Certificado individual (comportamiento original)
+      const certificateRef = doc(collection(db, CERTIFICATES_COLLECTION));
+      const newCertificate = {
+        ...baseCertificateData,
+        userId,
+        recipientUserId: userId
+      };
+
+      await setDoc(certificateRef, newCertificate);
+      
+      console.log('Individual certificate created:', {
+        certificateId: certificateRef.id,
+        userId
+      });
+
+      return certificateRef.id;
+    }
   } catch (error) {
     console.error('Error creating custom certificate:', error);
     throw error;
@@ -460,10 +495,32 @@ export const createCustomCertificate = async (userId, jamId, certificateData) =>
  */
 export const createRecognitionCertificate = async (userId, jamId, category, additionalData = {}) => {
   try {
+    // Esta función es para certificados simples desde CertificatesTab
+    // Los certificados grupales se manejan desde ManualCertificateCreator
+    
+    const getCategoryTitle = (cat) => {
+      const titles = {
+        'originality': 'Originalidad',
+        'creativity': 'Creatividad', 
+        'narrative': 'Narrativa',
+        'aesthetics': 'Dirección de Arte',
+        'sound': 'Música y Sonido'
+      };
+      return titles[cat] || cat;
+    };
+    
+    const categoryTitle = getCategoryTitle(category);
+    
     const recognitionData = {
       category,
       type: 'recognition',
       isWinner: true,
+      title: `Certificado de Reconocimiento - ${categoryTitle}`,
+      mainText: `Este certificado se otorga a:\n\n[NOMBRE]\n\nPor haber creado un juego excepcional que se destaca por su ${categoryTitle.toLowerCase()}.\n\nSu trabajo demuestra talento, dedicación y creatividad excepcionales.`,
+      gameName: additionalData.gameName || 'Juego Destacado',
+      gameLink: additionalData.gameLink || null,
+      participants: [{ name: 'Usuario', userId: userId }], // Certificado individual
+      isTeamCertificate: false,
       ...additionalData
     };
     

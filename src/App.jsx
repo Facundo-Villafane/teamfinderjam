@@ -6,6 +6,7 @@ import TeamFinderPage from './pages/TeamFinderPage'
 import ThemeVotingPage from './pages/ThemeVotingPage'
 import AdminPage from './pages/AdminPage'
 import ProfilePage from './pages/ProfilePage'
+import PublicCertificatePage from './pages/PublicCertificatePage'
 
 const App = () => {
   const { user, loading } = useAuth()
@@ -22,6 +23,10 @@ const App = () => {
 
   return (
     <Routes>
+      {/* Ruta pública para certificados - fuera del Layout para acceso sin autenticación */}
+      <Route path="/certificate/:certificateId" element={<PublicCertificatePage />} />
+      
+      {/* Rutas principales con Layout */}
       <Route path="/" element={<Layout user={user} isAdmin={isAdmin} />}>
         <Route index element={<Navigate to="/teamfinder" replace />} />
         <Route path="teamfinder" element={<TeamFinderPage user={user} />} />
