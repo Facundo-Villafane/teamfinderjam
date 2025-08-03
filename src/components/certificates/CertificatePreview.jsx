@@ -142,16 +142,21 @@ export const CertificatePreview = ({
   };
 
   const renderContent = () => {
-    // PRIMERO: Verificar si es certificado de reconocimiento
-    if (isRecognitionCertificate(certificate)) {
-      return renderRecognitionContent();
-    }
-    // SEGUNDO: Verificar si es un certificado personalizado
-    else if (certificate.customTitle || certificate.customMainText) {
+    // ✅ CORRECCIÓN: MISMA LÓGICA DE PRIORIDADES QUE EL PDF
+    
+    // PRIORIDAD 1: Verificar si es un certificado personalizado (Manual Certificate Creator)
+    if (certificate.customTitle || certificate.customMainText) {
+      console.log('Preview: Using CUSTOM certificate template');
       return renderCustomContent();
+    }
+    // PRIORIDAD 2: Verificar si es certificado de reconocimiento predefinido
+    else if (isRecognitionCertificate(certificate)) {
+      console.log('Preview: Using RECOGNITION certificate template');
+      return renderRecognitionContent();
     } 
     else {
-      // Certificado de participación por defecto
+      // PRIORIDAD 3: Certificado de participación por defecto
+      console.log('Preview: Using PARTICIPATION certificate template');
       return renderParticipationContent();
     }
   };
@@ -381,6 +386,36 @@ export const CertificatePreview = ({
   };
 
   const renderCustomContent = () => {
+    // ✅ MEJORADO: Procesar texto personalizado con reemplazo de nombres para equipos
+    let text = certificate.customMainText || certificate.mainText || '';
+    
+    // Manejar reemplazo de nombres para equipos
+    if (certificate.participants && certificate.participants.length > 1) {
+      const names = certificate.participants.map(p => p.name);
+      let nameText;
+      
+      if (names.length === 2) {
+        nameText = names.join(' y ');
+      } else if (names.length > 2) {
+        const allButLast = names.slice(0, -1);
+        const lastName = names[names.length - 1];
+        nameText = allButLast.join(', ') + ' y ' + lastName;
+      } else {
+        nameText = names.join(', ');
+      }
+      
+      text = text.replace(/\[NOMBRE\]/g, nameText);
+    } else {
+      text = text.replace(/\[NOMBRE\]/g, userName);
+    }
+    
+    // Reemplazar otros placeholders
+    if (certificate.gameName) {
+      text = text.replace(/\[JUEGO\]/g, certificate.gameName);
+    }
+    
+    const lines = text.split('\n');
+
     return (
       <div className="relative h-full flex flex-col justify-center items-center text-white p-8">
         {/* 1. TÍTULO PERSONALIZADO */}
@@ -399,48 +434,65 @@ export const CertificatePreview = ({
           </div>
         )}
 
-        {/* 3. NOMBRES DE PARTICIPANTES */}
-        {certificate.participants && certificate.participants.length > 0 && (
-          <div className="text-center mb-8">
-            {certificate.participants.length === 1 ? (
-              // Un solo participante
-              <h3 className="text-4xl md:text-5xl font-bold drop-shadow-lg" 
-                  style={{ color: '#92f8cf' }}>
-                {certificate.participants[0].name}
-              </h3>
-            ) : (
-              // Múltiples participantes
-              <div>
-                <p className="text-sm text-gray-300 mb-3">Otorgado a:</p>
-                <div className="space-y-2">
-                  {certificate.participants.map((participant, index) => (
-                    <h3 key={index} className="text-2xl md:text-3xl font-bold drop-shadow" 
-                        style={{ color: '#92f8cf' }}>
-                      {participant.name}
-                    </h3>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 4. CONTENIDO PRINCIPAL PERSONALIZADO */}
-        {(certificate.customMainText || certificate.mainText) && (
+        {/* 3. CONTENIDO PRINCIPAL PERSONALIZADO */}
+        {text && (
           <div className="text-center mb-8 max-w-4xl">
             <div className="text-sm md:text-base text-gray-300 drop-shadow leading-relaxed">
-              {(certificate.customMainText || certificate.mainText).split('\n').map((line, index) => {
+              {lines.map((line, index) => {
                 if (line.trim() === '') {
                   return <div key={index} className="h-2"></div>;
                 }
                 
-                return (
-                  <p key={index} className="mb-2">
-                    {line.trim()}
-                  </p>
-                );
+                // Detectar texto que debe ir en negrita
+                const isHighlight = line.includes('LO LOGRASTE') || 
+                                   line.includes('lo lograste') ||
+                                   line.includes('lo lograron') ||
+                                   line.includes('no se fuerza, se nota') ||
+                                   line.includes('no hay límites') ||
+                                   line.includes('lo entendió perfectamente') ||
+                                   line.includes('con intención') ||
+                                   line.includes('conduce') ||
+                                   line.match(/\*\*.*\*\*/);
+                
+                if (isHighlight) {
+                  // Procesar línea con texto en negrita
+                  const parts = line.split(/(\*\*.*?\*\*|LO LOGRASTE|lo lograste|lo lograron|no se fuerza, se nota|no hay límites|lo entendió perfectamente|con intención|conduce)/);
+                  
+                  return (
+                    <p key={index} className="mb-2">
+                      {parts.map((part, partIndex) => {
+                        if (part.match(/\*\*.*\*\*|LO LOGRASTE|lo lograste|lo lograron|no se fuerza, se nota|no hay límites|lo entendió perfectamente|con intención|conduce/)) {
+                          const cleanText = part.replace(/\*\*/g, '');
+                          return (
+                            <span key={partIndex} className="font-bold text-white">
+                              {cleanText}
+                            </span>
+                          );
+                        } else if (part.trim()) {
+                          return <span key={partIndex}>{part}</span>;
+                        }
+                        return null;
+                      })}
+                    </p>
+                  );
+                } else {
+                  return (
+                    <p key={index} className="mb-2">
+                      {line.trim()}
+                    </p>
+                  );
+                }
               })}
             </div>
+          </div>
+        )}
+
+        {/* 4. INFORMACIÓN DE EQUIPO (si aplica) */}
+        {certificate.participants && certificate.participants.length > 1 && (
+          <div className="text-center mb-6">
+            <p className="text-xs text-gray-400 italic">
+              Certificado de equipo - {certificate.participants.length} participantes
+            </p>
           </div>
         )}
 

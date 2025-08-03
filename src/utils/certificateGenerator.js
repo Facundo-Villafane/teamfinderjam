@@ -1,4 +1,29 @@
-// src/utils/certificateGenerator.js - Versión restaurada con diseño elegante + QR + múltiples participantes
+// src/utils/certificateGenerator.js - Versión restaurada con diseño elegante + QR robusto + múltiples participantes
+import { jsPDF } from 'jspdf';
+
+// Importación condicional de QRCode para evitar errores
+let QRCode = null;
+try {
+  QRCode = await import('qrcode');
+  QRCode = QRCode.default || QRCode;
+} catch (error) {
+  console.warn('QRCode library not available - QR codes will be skipped');
+}
+
+/**
+ * Carga QRCode dinámicamente para evitar errores de importación
+ */
+const loadQRCode = async () => {
+  if (QRCode) return QRCode;
+  
+  try {
+    const qrModule = await import('qrcode');
+    QRCode = qrModule.default || qrModule;
+    return QRCode;
+  } catch (error) {
+    console.warn('Could not load QRCode library:', error);
+    return null;
+  }// src/utils/certificateGenerator.js - Versión restaurada con diseño elegante + QR + múltiples participantes
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
 
@@ -526,7 +551,7 @@ const addParticipationCertificateText = (pdf, certificateData, pageWidth, pageHe
 };
 
 /**
- * CERTIFICADOS PERSONALIZADOS (Manual Certificate Creator)
+ * CERTIFICADOS PERSONALIZADOS (Manual Certificate Creator) - MEJORADO
  */
 const addCustomCertificateText = (pdf, certificateData, pageWidth, pageHeight, centerX) => {
   // 1. TÍTULO PERSONALIZADO
@@ -545,51 +570,100 @@ const addCustomCertificateText = (pdf, certificateData, pageWidth, pageHeight, c
     yPosition += 20;
   }
   
-  // 3. NOMBRES DE PARTICIPANTES
-  if (certificateData.participants && certificateData.participants.length > 0) {
-    if (certificateData.participants.length === 1) {
-      // Un solo participante
-      pdf.setFontSize(28);
-      pdf.setFont('helvetica', 'bold');
-      pdf.setTextColor(146, 248, 207);
-      pdf.text(certificateData.participants[0].name, centerX, yPosition + 15, { align: 'center' });
-      yPosition += 35;
-    } else {
-      // Múltiples participantes
-      pdf.setFontSize(13);
-      pdf.setTextColor(180, 180, 180);
-      pdf.setFont('helvetica', 'normal');
-      pdf.text('Otorgado a:', centerX, yPosition, { align: 'center' });
-      yPosition += 15;
-      
-      certificateData.participants.forEach((participant) => {
-        pdf.setFontSize(20);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setTextColor(146, 248, 207);
-        pdf.text(participant.name, centerX, yPosition, { align: 'center' });
-        yPosition += 14;
-      });
-      yPosition += 10;
-    }
-  }
-  
-  // 4. CONTENIDO PRINCIPAL PERSONALIZADO
+  // 3. CONTENIDO PRINCIPAL PERSONALIZADO
   if (certificateData.customMainText || certificateData.mainText) {
-    const mainTextLines = (certificateData.customMainText || certificateData.mainText).split('\n');
+    let text = certificateData.customMainText || certificateData.mainText;
+    
+    // ✅ CORRECCIÓN: Manejar reemplazo de nombres para equipos
+    if (certificateData.participants && certificateData.participants.length > 1) {
+      // Para equipos, reemplazar [NOMBRE] con todos los nombres del equipo
+      const names = certificateData.participants.map(p => p.name);
+      let nameText;
+      
+      if (names.length === 2) {
+        nameText = names.join(' y ');
+      } else if (names.length > 2) {
+        const allButLast = names.slice(0, -1);
+        const lastName = names[names.length - 1];
+        nameText = allButLast.join(', ') + ' y ' + lastName;
+      } else {
+        nameText = names.join(', ');
+      }
+      
+      text = text.replace(/\[NOMBRE\]/g, nameText);
+    } else {
+      // Para participante individual
+      text = text.replace(/\[NOMBRE\]/g, certificateData.userName);
+    }
+    
+    // Reemplazar otros placeholders
+    if (certificateData.gameName) {
+      text = text.replace(/\[JUEGO\]/g, certificateData.gameName);
+    }
+    
+    // Dividir en líneas y procesar
+    const lines = text.split('\n');
     
     pdf.setFontSize(13);
     pdf.setTextColor(190, 190, 190);
     pdf.setFont('helvetica', 'normal');
     
-    mainTextLines.forEach((line) => {
+    lines.forEach((line) => {
       if (line.trim() === '') {
         yPosition += 6;
         return;
       }
       
-      pdf.text(line.trim(), centerX, yPosition, { align: 'center' });
+      // Detectar texto que debe ir en negrita
+      if (line.includes('LO LOGRASTE') || 
+          line.includes('lo lograste') ||
+          line.includes('lo lograron') ||
+          line.includes('no se fuerza, se nota') ||
+          line.includes('no hay límites') ||
+          line.includes('lo entendió perfectamente') ||
+          line.includes('con intención') ||
+          line.includes('conduce') ||
+          line.match(/\*\*.*\*\*/)) {
+        
+        // Procesar línea con texto en negrita
+        const parts = line.split(/(\*\*.*?\*\*|LO LOGRASTE|lo lograste|lo lograron|no se fuerza, se nota|no hay límites|lo entendió perfectamente|con intención|conduce)/);
+        let xOffset = 0;
+        const cleanLine = line.replace(/\*\*/g, '');
+        const startX = centerX - (pdf.getTextWidth(cleanLine) / 2);
+        
+        parts.forEach(part => {
+          if (part.match(/\*\*.*\*\*|LO LOGRASTE|lo lograste|lo lograron|no se fuerza, se nota|no hay límites|lo entendió perfectamente|con intención|conduce/)) {
+            pdf.setFont('helvetica', 'bold');
+            pdf.setTextColor(255, 255, 255);
+            const cleanText = part.replace(/\*\*/g, '');
+            pdf.text(cleanText, startX + xOffset, yPosition);
+            xOffset += pdf.getTextWidth(cleanText);
+          } else if (part.trim()) {
+            pdf.setFont('helvetica', 'normal');
+            pdf.setTextColor(190, 190, 190);
+            pdf.text(part, startX + xOffset, yPosition);
+            xOffset += pdf.getTextWidth(part);
+          }
+        });
+      } else {
+        // Línea normal
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(190, 190, 190);
+        pdf.text(line, centerX, yPosition, { align: 'center' });
+      }
+      
       yPosition += 9;
     });
+  }
+  
+  // 4. INFORMACIÓN DE PARTICIPANTES (si es equipo)
+  if (certificateData.participants && certificateData.participants.length > 1) {
+    yPosition += 10;
+    pdf.setFontSize(12);
+    pdf.setTextColor(160, 160, 160);
+    pdf.setFont('helvetica', 'italic');
+    pdf.text(`Certificado de equipo - ${certificateData.participants.length} participantes`, centerX, yPosition, { align: 'center' });
+    yPosition += 10;
   }
   
   // 5. FIRMA PERSONALIZADA
@@ -611,7 +685,7 @@ const addCustomCertificateText = (pdf, certificateData, pageWidth, pageHeight, c
 };
 
 /**
- * Función principal de texto - Determina qué tipo de certificado generar
+ * Función principal de texto - LÓGICA DE PRIORIDADES CORREGIDA
  */
 const addCertificateText = (pdf, certificateData, pageWidth, pageHeight) => {
   const centerX = pageWidth / 2;
@@ -622,20 +696,24 @@ const addCertificateText = (pdf, certificateData, pageWidth, pageHeight) => {
     isWinner: certificateData.isWinner,
     gameName: certificateData.gameName,
     customTitle: certificateData.customTitle,
+    customMainText: certificateData.customMainText,
     participants: certificateData.participants,
     isRecognition: isRecognitionCertificate(certificateData)
   });
   
-  // PRIMERO: Verificar si es certificado de reconocimiento
-  if (isRecognitionCertificate(certificateData)) {
-    addRecognitionCertificateText(pdf, certificateData, pageWidth, pageHeight, centerX);
-  }
-  // SEGUNDO: Verificar si es un certificado personalizado
-  else if (certificateData.customTitle || certificateData.customMainText) {
+  // ✅ CORRECCIÓN: PRIORIDAD 1 - Certificados personalizados (Manual Certificate Creator)
+  if (certificateData.customTitle || certificateData.customMainText) {
+    console.log('Using CUSTOM certificate template');
     addCustomCertificateText(pdf, certificateData, pageWidth, pageHeight, centerX);
+  }
+  // PRIORIDAD 2 - Certificados de reconocimiento predefinidos
+  else if (isRecognitionCertificate(certificateData)) {
+    console.log('Using RECOGNITION certificate template');
+    addRecognitionCertificateText(pdf, certificateData, pageWidth, pageHeight, centerX);
   } 
+  // PRIORIDAD 3 - Certificados de participación predefinidos
   else {
-    // Certificado de participación por defecto
+    console.log('Using PARTICIPATION certificate template');
     addParticipationCertificateText(pdf, certificateData, pageWidth, pageHeight, centerX);
   }
   

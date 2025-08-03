@@ -200,7 +200,7 @@ const ProfilePage = ({ user }) => {
         date: certificateDate,
         certificateId: certificate.id,
         gameName: certificate.gameName || null,
-        gameLink: certificate.gameLink || null,
+        gameLink: certificate.gameLink || null, // ✅ ESTO ESTABA FALTANDO para el QR
         
         // ✅ ESTO ES LO QUE ESTABA FALTANDO: Información del equipo
         participants: certificate.participants || null,
